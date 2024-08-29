@@ -12,8 +12,8 @@ type node struct {
 	dockerClient *client.Client
 }
 
-// NodeList 获取主机节点列表
-func (receiver node) NodeList() collections.List[DockerNodeVO] {
+// List 获取主机节点列表
+func (receiver node) List() collections.List[DockerNodeVO] {
 	progress := make(chan string, 1000)
 	// docker node ls --format "table {{.Hostname}}|{{.Status}}|{{.Availability}}|{{.ManagerStatus}}|{{.EngineVersion}}"
 	var exitCode = exec.RunShell("docker node ls --format \"table {{.Hostname}}|{{.Status}}|{{.Availability}}|{{.ManagerStatus}}|{{.EngineVersion}}\"", progress, nil, "", false)
@@ -42,8 +42,8 @@ func (receiver node) NodeList() collections.List[DockerNodeVO] {
 	return lstDockerInstance
 }
 
-// NodeInfo 获取节点详情
-func (receiver node) NodeInfo(nodeName string) DockerNodeVO {
+// Info 获取节点详情
+func (receiver node) Info(nodeName string) DockerNodeVO {
 	progress := make(chan string, 1000)
 	// docker node inspect node_1 --pretty
 	var exitCode = exec.RunShell(fmt.Sprintf("docker node inspect %s --pretty", nodeName), progress, nil, "", false)
