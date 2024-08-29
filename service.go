@@ -16,6 +16,7 @@ type service struct {
 	dockerClient *client.Client
 }
 
+// Delete 删除容器服务
 func (receiver service) Delete(containerId string) error {
 	// docker service rm fops
 	c := make(chan string, 1000)
@@ -26,6 +27,7 @@ func (receiver service) Delete(containerId string) error {
 	return nil
 }
 
+// SetImagesAndReplicas 更新镜像版本和副本数量
 func (receiver service) SetImagesAndReplicas(containerId string, dockerImages string, dockerReplicas int) error {
 	c := make(chan string, 1000)
 	var exitCode = exec.RunShell(fmt.Sprintf("docker service update --image %s --replicas %v --update-delay 10s --with-registry-auth %s", dockerImages, dockerReplicas, containerId), c, nil, "", false)
@@ -35,6 +37,7 @@ func (receiver service) SetImagesAndReplicas(containerId string, dockerImages st
 	return nil
 }
 
+// SetImages 更新镜像版本
 func (receiver service) SetImages(containerId string, dockerImages string) error {
 	c := make(chan string, 1000)
 	var exitCode = exec.RunShell(fmt.Sprintf("docker service update --image %s --update-delay 10s --with-registry-auth %s", dockerImages, containerId), c, nil, "", false)
@@ -44,6 +47,7 @@ func (receiver service) SetImages(containerId string, dockerImages string) error
 	return nil
 }
 
+// SetReplicas 更新副本数量
 func (receiver service) SetReplicas(containerId string, dockerReplicas int) error {
 	c := make(chan string, 1000)
 	var exitCode = exec.RunShell(fmt.Sprintf("docker service update --replicas %v --with-registry-auth %s", dockerReplicas, containerId), c, nil, "", false)
@@ -53,6 +57,7 @@ func (receiver service) SetReplicas(containerId string, dockerReplicas int) erro
 	return nil
 }
 
+// Restart 重启容器
 func (receiver service) Restart(containerId string) error {
 	c := make(chan string, 1000)
 	var exitCode = exec.RunShell(fmt.Sprintf("docker service update --with-registry-auth --force %s", containerId), c, nil, "", false)
@@ -62,6 +67,7 @@ func (receiver service) Restart(containerId string) error {
 	return nil
 }
 
+// Inspect 查看服务说情
 func (receiver service) Inspect(containerId string) (ServiceInspectJson, error) {
 	progress := make(chan string, 1000)
 	// docker service inspect fops
@@ -73,6 +79,7 @@ func (receiver service) Inspect(containerId string) (ServiceInspectJson, error) 
 	return serviceInspectJson, err
 }
 
+// Exists 服务是否存在
 func (receiver service) Exists(containerId string) (bool, error) {
 	serviceInspectJsons, err := receiver.Inspect(containerId)
 	if len(serviceInspectJsons) == 0 {
@@ -81,6 +88,7 @@ func (receiver service) Exists(containerId string) (bool, error) {
 	return serviceInspectJsons[0].ID != "", err
 }
 
+// Create 创建服务
 func (receiver service) Create(containerId, dockerNodeRole, additionalScripts, dockerNetwork string, dockerReplicas int, dockerImages string, limitCpus float64, limitMemory string) error {
 	c := make(chan string, 1000)
 	var sb bytes.Buffer
@@ -109,6 +117,7 @@ func (receiver service) Create(containerId, dockerNodeRole, additionalScripts, d
 	return nil
 }
 
+// Logs 获取日志
 func (receiver service) Logs(containerId string, tailCount int) (collections.List[string], error) {
 	progress := make(chan string, 1000)
 	// docker service logs fops
@@ -125,7 +134,8 @@ func (receiver service) Logs(containerId string, tailCount int) (collections.Lis
 	return lst, nil
 }
 
-func (receiver service) ServiceList() collections.List[ServiceListVO] {
+// List 获取所有Service
+func (receiver service) List() collections.List[ServiceListVO] {
 	progress := make(chan string, 1000)
 	// docker service ls --format "table {{.ID}}|{{.Name}}|{{.Mode}}|{{.Replicas}}|{{.Image}}|{{.Ports}}"
 	var exitCode = exec.RunShell("docker service ls --format \"table {{.ID}}|{{.Name}}|{{.Replicas}}|{{.Image}}\"", progress, nil, "", false)
@@ -154,6 +164,7 @@ func (receiver service) ServiceList() collections.List[ServiceListVO] {
 	return lstDockerName
 }
 
+// PS 获取容器运行的实例信息
 func (receiver service) PS(containerId string) collections.List[ServicePsVO] {
 	progress := make(chan string, 1000)
 	// docker service ps fops --format "table {{.ID}}|{{.Name}}|{{.Image}}|{{.Node}}|{{.DesiredState}}|{{.CurrentState}}|{{.Error}}"

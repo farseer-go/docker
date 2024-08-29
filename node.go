@@ -12,6 +12,7 @@ type node struct {
 	dockerClient *client.Client
 }
 
+// NodeList 获取主机节点列表
 func (receiver node) NodeList() collections.List[DockerNodeVO] {
 	progress := make(chan string, 1000)
 	// docker node ls --format "table {{.Hostname}}|{{.Status}}|{{.Availability}}|{{.ManagerStatus}}|{{.EngineVersion}}"
@@ -41,6 +42,7 @@ func (receiver node) NodeList() collections.List[DockerNodeVO] {
 	return lstDockerInstance
 }
 
+// NodeInfo 获取节点详情
 func (receiver node) NodeInfo(nodeName string) DockerNodeVO {
 	progress := make(chan string, 1000)
 	// docker node inspect node_1 --pretty
