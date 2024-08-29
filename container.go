@@ -127,10 +127,10 @@ func (receiver container) Cp(containerId string, sourceFile, destFile string, ct
 
 // Logs 获取日志
 func (receiver container) Logs(containerId string, tailCount int) collections.List[string] {
-	progress := make(chan string, 1000)
+	c := make(chan string, 1000)
 	// docker service logs fops
-	exitCode := exec.RunShell(fmt.Sprintf("docker logs %s --tail %d", containerId, tailCount), progress, nil, "", true)
-	lst := collections.NewListFromChan(progress)
+	exitCode := exec.RunShell(fmt.Sprintf("docker logs %s --tail %d", containerId, tailCount), c, nil, "", true)
+	lst := collections.NewListFromChan(c)
 	if exitCode != 0 {
 		lst.Insert(0, "获取日志失败。")
 	}

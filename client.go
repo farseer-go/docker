@@ -15,6 +15,7 @@ type Client struct {
 	dockerClient *client.Client
 	Container    container
 	Service      service
+	Node         node
 }
 
 // NewClient 实例化一个Client
@@ -27,6 +28,7 @@ func NewClient() (*Client, error) {
 		dockerClient: cli,
 		Container:    container{dockerClient: cli},
 		Service:      service{dockerClient: cli},
+		Node:         node{dockerClient: cli},
 	}, nil
 }
 
