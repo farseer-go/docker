@@ -83,6 +83,9 @@ func (receiver service) Inspect(containerId string) (ServiceInspectJson, error) 
 // Exists 服务是否存在
 func (receiver service) Exists(containerId string) (bool, error) {
 	serviceInspectJsons, err := receiver.Inspect(containerId)
+	if err != nil && strings.Contains(err.Error(), " not found") {
+		return false, nil
+	}
 	if len(serviceInspectJsons) == 0 {
 		return false, err
 	}
