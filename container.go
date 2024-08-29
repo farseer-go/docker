@@ -3,6 +3,7 @@ package docker
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/docker/docker/client"
 	"github.com/farseer-go/collections"
@@ -137,13 +138,19 @@ func (receiver container) Logs(containerId string, tailCount int) collections.Li
 	return lst
 }
 
-func (receiver container) Inspect(containerId string) {
-	//progress := make(chan string, 1000)
-	//// docker inspect r6r8uboagmln
-	//var exitCode = exec.RunShell(fmt.Sprintf("docker inspect %s", containerId), progress, nil, "", true)
-	//lst := collections.NewListFromChan(progress)
-	//if exitCode != 0 {
-	//	lst.Insert(0, "获取日志失败。")
-	//}
-	//return lst
+// Inspect 查看容器详情
+func (receiver container) Inspect(containerId string) (ContainerInspectJson, error) {
+	progress := make(chan string, 1000)
+	// docker service inspect fops
+	exec.RunShell(fmt.Sprintf("docker inspect %s", containerId), progress, nil, "", false)
+	lst := collections.NewListFromChan(progress)
+	if lst.ContainsAny("No such object") {
+		return nil, nil
+	}
+
+	var containerInspectJson ContainerInspectJson
+	serviceInspectContent := lst.ToString("\n")
+	err := json.Unmarshal([]byte(serviceInspectContent), &containerInspectJson)
+
+	return containerInspectJson, err
 }

@@ -47,6 +47,7 @@ type DockerLabelVO struct {
 	Value string // 标签值
 }
 
+// ServiceInspectJson 服务详情
 type ServiceInspectJson []struct {
 	ID      string `json:"ID"`
 	Version struct {
@@ -186,4 +187,108 @@ type ServiceInspectJson []struct {
 		CompletedAt time.Time `json:"CompletedAt"`
 		Message     string    `json:"Message"`
 	} `json:"UpdateStatus"`
+}
+
+type ContainerInspectJson []struct {
+	ID      string `json:"ID"`
+	Version struct {
+		Index int `json:"Index"`
+	} `json:"Version"`
+	CreatedAt time.Time         `json:"CreatedAt"`
+	UpdatedAt time.Time         `json:"UpdatedAt"`
+	Labels    map[string]string `json:"Labels"`
+	Spec      struct {
+		ContainerSpec struct {
+			Image  string   `json:"Image"`
+			Env    []string `json:"Env"`
+			Init   bool     `json:"Init"`
+			Mounts []struct {
+				Type   string `json:"Type"`
+				Source string `json:"Source"`
+				Target string `json:"Target"`
+			} `json:"Mounts"`
+			DNSConfig struct {
+			} `json:"DNSConfig"`
+			Isolation string `json:"Isolation"`
+		} `json:"ContainerSpec"`
+		Resources struct {
+			Limits struct {
+			} `json:"Limits"`
+			Reservations struct {
+			} `json:"Reservations"`
+		} `json:"Resources"`
+		Placement struct {
+			Constraints []string `json:"Constraints"`
+			Platforms   []struct {
+				Architecture string `json:"Architecture"`
+				OS           string `json:"OS"`
+			} `json:"Platforms"`
+		} `json:"Placement"`
+		Networks []struct {
+			Target string `json:"Target"`
+		} `json:"Networks"`
+		ForceUpdate int `json:"ForceUpdate"`
+	} `json:"Spec"`
+	ServiceID string `json:"ServiceID"`
+	Slot      int    `json:"Slot"`
+	NodeID    string `json:"NodeID"`
+	Status    struct {
+		Timestamp       time.Time `json:"Timestamp"`
+		State           string    `json:"State"`
+		Message         string    `json:"Message"`
+		Err         	string    `json:"Err"`
+		ContainerStatus struct {
+			ContainerID string `json:"ContainerID"`
+			PID         int    `json:"PID"`
+			ExitCode    int    `json:"ExitCode"`
+		} `json:"ContainerStatus"`
+		PortStatus struct {
+		} `json:"PortStatus"`
+	} `json:"Status"`
+	DesiredState        string `json:"DesiredState"`
+	NetworksAttachments []struct {
+		Network struct {
+			ID      string `json:"ID"`
+			Version struct {
+				Index int `json:"Index"`
+			} `json:"Version"`
+			CreatedAt time.Time `json:"CreatedAt"`
+			UpdatedAt time.Time `json:"UpdatedAt"`
+			Spec      struct {
+				Name   string `json:"Name"`
+				Labels struct {
+				} `json:"Labels"`
+				DriverConfiguration struct {
+					Name string `json:"Name"`
+				} `json:"DriverConfiguration"`
+				Attachable  bool `json:"Attachable"`
+				IPAMOptions struct {
+					Driver struct {
+						Name string `json:"Name"`
+					} `json:"Driver"`
+					Configs []struct {
+						Subnet  string `json:"Subnet"`
+						Gateway string `json:"Gateway"`
+					} `json:"Configs"`
+				} `json:"IPAMOptions"`
+				Scope string `json:"Scope"`
+			} `json:"Spec"`
+			DriverState struct {
+				Name    string `json:"Name"`
+				Options struct {
+					ComDockerNetworkDriverOverlayVxlanidList string `json:"com.docker.network.driver.overlay.vxlanid_list"`
+				} `json:"Options"`
+			} `json:"DriverState"`
+			IPAMOptions struct {
+				Driver struct {
+					Name string `json:"Name"`
+				} `json:"Driver"`
+				Configs []struct {
+					Subnet  string `json:"Subnet"`
+					Gateway string `json:"Gateway"`
+				} `json:"Configs"`
+			} `json:"IPAMOptions"`
+		} `json:"Network"`
+		Addresses []string `json:"Addresses"`
+	} `json:"NetworksAttachments"`
 }
