@@ -73,6 +73,10 @@ func (receiver service) Inspect(containerId string) (ServiceInspectJson, error) 
 	// docker service inspect fops
 	exec.RunShell(fmt.Sprintf("docker service inspect %s", containerId), progress, nil, "", false)
 	lst := collections.NewListFromChan(progress)
+	if lst.ContainsAny("no such service"){
+		return nil, nil
+	}
+
 	var serviceInspectJson ServiceInspectJson
 	serviceInspectContent := lst.ToString("\n")
 	err := json.Unmarshal([]byte(serviceInspectContent), &serviceInspectJson)
