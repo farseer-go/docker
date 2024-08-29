@@ -71,10 +71,11 @@ func (receiver service) Restart(containerId string) error {
 func (receiver service) Inspect(containerId string) (ServiceInspectJson, error) {
 	progress := make(chan string, 1000)
 	// docker service inspect fops
-	exec.RunShell(fmt.Sprintf("docker service inspect %s", containerId), progress, nil, "", true)
+	exec.RunShell(fmt.Sprintf("docker service inspect %s", containerId), progress, nil, "", false)
 	lst := collections.NewListFromChan(progress)
 	var serviceInspectJson ServiceInspectJson
-	err := json.Unmarshal([]byte(lst.ToString("\n")), &serviceInspectJson)
+	serviceInspectContent := lst.ToString("\n")
+	err := json.Unmarshal([]byte(serviceInspectContent), &serviceInspectJson)
 
 	return serviceInspectJson, err
 }
