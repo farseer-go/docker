@@ -27,18 +27,21 @@ type ServicePsVO struct {
 
 // DockerNodeVO 集群节点信息 docker node ls
 type DockerNodeVO struct {
-	NodeName      string                          // 节点名称
-	Status        string                          // 主机状态   Ready
-	Availability  string                          // 节点状态
-	IsMaster      bool                            // 是否为主节点
-	IsHealth      bool                            // 应用是否健康
-	EngineVersion string                          // 引擎版本
-	IP            string                          // 节点IP
-	OS            string                          // 操作系统
-	Architecture  string                          // 架构
-	CPUs          string                          // CPU核心数
-	Memory        string                          // 内存
-	Label         collections.List[DockerLabelVO] // 标签
+	NodeName           string                          // 节点名称
+	Status             string                          // 主机状态   Ready
+	Availability       string                          // 节点状态
+	IsMaster           bool                            // 是否为主节点
+	IsHealth           bool                            // 应用是否健康
+	EngineVersion      string                          // 引擎版本
+	IP                 string                          // 节点IP
+	OS                 string                          // 操作系统
+	Architecture       string                          // 架构
+	CPUs               string                          // CPU核心数
+	Memory             string                          // 内存
+	Label              collections.List[DockerLabelVO] // 标签
+	CpuUsagePercent    float64                         // CPU使用百分比
+	MemoryUsagePercent float64                         // 内存使用百分比
+	MemoryUsage        uint64                          // 内存已使用
 }
 
 // DockerLabelVO 标签
