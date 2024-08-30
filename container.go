@@ -139,18 +139,35 @@ func (receiver container) Logs(containerId string, tailCount int) collections.Li
 }
 
 // Inspect 查看容器详情
-func (receiver container) Inspect(containerId string) (ContainerInspectJson, error) {
+func (receiver container) Inspect(containerId string) (ContainerIdInspectJson, error) {
 	progress := make(chan string, 1000)
-	// docker service inspect fops
+	// docker inspect rqcinkiry0jr
 	exec.RunShell(fmt.Sprintf("docker inspect %s", containerId), progress, nil, "", false)
 	lst := collections.NewListFromChan(progress)
 	if lst.ContainsAny("No such object") {
 		return nil, nil
 	}
 
-	var containerInspectJson ContainerInspectJson
+	var containerInspectJson ContainerIdInspectJson
 	serviceInspectContent := lst.ToString("\n")
 	err := json.Unmarshal([]byte(serviceInspectContent), &containerInspectJson)
 
 	return containerInspectJson, err
+}
+
+// InspectByServiceId 查看服务详情
+func (receiver container) InspectByServiceId(serviceId string) (ServiceIdInspectJson, error) {
+	progress := make(chan string, 1000)
+	// docker inspect rqcinkiry0jr
+	exec.RunShell(fmt.Sprintf("docker inspect %s", serviceId), progress, nil, "", false)
+	lst := collections.NewListFromChan(progress)
+	if lst.ContainsAny("No such object") {
+		return nil, nil
+	}
+
+	var serviceIdInspectJson ServiceIdInspectJson
+	serviceInspectContent := lst.ToString("\n")
+	err := json.Unmarshal([]byte(serviceInspectContent), &serviceIdInspectJson)
+
+	return serviceIdInspectJson, err
 }
