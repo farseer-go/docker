@@ -17,10 +17,10 @@ type service struct {
 }
 
 // Delete 删除容器服务
-func (receiver service) Delete(containerId string) error {
+func (receiver service) Delete(serviceName string) error {
 	// docker service rm fops
 	c := make(chan string, 1000)
-	var exitCode = exec.RunShell(fmt.Sprintf("docker service rm %s", containerId), c, nil, "", false)
+	var exitCode = exec.RunShell(fmt.Sprintf("docker service rm %s", serviceName), c, nil, "", false)
 	if exitCode != 0 {
 		return fmt.Errorf(collections.NewListFromChan(c).ToString("\n"))
 	}
@@ -28,9 +28,9 @@ func (receiver service) Delete(containerId string) error {
 }
 
 // SetImagesAndReplicas 更新镜像版本和副本数量
-func (receiver service) SetImagesAndReplicas(containerId string, dockerImages string, dockerReplicas int) error {
+func (receiver service) SetImagesAndReplicas(serviceName string, dockerImages string, dockerReplicas int) error {
 	c := make(chan string, 1000)
-	var exitCode = exec.RunShell(fmt.Sprintf("docker service update --image %s --replicas %v --update-delay 10s --with-registry-auth %s", dockerImages, dockerReplicas, containerId), c, nil, "", false)
+	var exitCode = exec.RunShell(fmt.Sprintf("docker service update --image %s --replicas %v --update-delay 10s --with-registry-auth %s", dockerImages, dockerReplicas, serviceName), c, nil, "", false)
 	if exitCode != 0 {
 		return fmt.Errorf(collections.NewListFromChan(c).ToString("\n"))
 	}
@@ -38,9 +38,9 @@ func (receiver service) SetImagesAndReplicas(containerId string, dockerImages st
 }
 
 // SetImages 更新镜像版本
-func (receiver service) SetImages(containerId string, dockerImages string) error {
+func (receiver service) SetImages(serviceName string, dockerImages string) error {
 	c := make(chan string, 1000)
-	var exitCode = exec.RunShell(fmt.Sprintf("docker service update --image %s --update-delay 10s --with-registry-auth %s", dockerImages, containerId), c, nil, "", false)
+	var exitCode = exec.RunShell(fmt.Sprintf("docker service update --image %s --update-delay 10s --with-registry-auth %s", dockerImages, serviceName), c, nil, "", false)
 	if exitCode != 0 {
 		return fmt.Errorf(collections.NewListFromChan(c).ToString("\n"))
 	}
@@ -48,9 +48,9 @@ func (receiver service) SetImages(containerId string, dockerImages string) error
 }
 
 // SetReplicas 更新副本数量
-func (receiver service) SetReplicas(containerId string, dockerReplicas int) error {
+func (receiver service) SetReplicas(serviceName string, dockerReplicas int) error {
 	c := make(chan string, 1000)
-	var exitCode = exec.RunShell(fmt.Sprintf("docker service update --replicas %v --with-registry-auth %s", dockerReplicas, containerId), c, nil, "", false)
+	var exitCode = exec.RunShell(fmt.Sprintf("docker service update --replicas %v --with-registry-auth %s", dockerReplicas, serviceName), c, nil, "", false)
 	if exitCode != 0 {
 		return fmt.Errorf(collections.NewListFromChan(c).ToString("\n"))
 	}
@@ -58,9 +58,9 @@ func (receiver service) SetReplicas(containerId string, dockerReplicas int) erro
 }
 
 // Restart 重启容器
-func (receiver service) Restart(containerId string) error {
+func (receiver service) Restart(serviceName string) error {
 	c := make(chan string, 1000)
-	var exitCode = exec.RunShell(fmt.Sprintf("docker service update --with-registry-auth --force %s", containerId), c, nil, "", false)
+	var exitCode = exec.RunShell(fmt.Sprintf("docker service update --with-registry-auth --force %s", serviceName), c, nil, "", false)
 	if exitCode != 0 {
 		return fmt.Errorf(collections.NewListFromChan(c).ToString("\n"))
 	}
@@ -68,10 +68,10 @@ func (receiver service) Restart(containerId string) error {
 }
 
 // Inspect 查看服务详情
-func (receiver service) Inspect(containerId string) (ServiceInspectJson, error) {
+func (receiver service) Inspect(serviceName string) (ServiceInspectJson, error) {
 	progress := make(chan string, 1000)
 	// docker service inspect fops
-	exec.RunShell(fmt.Sprintf("docker service inspect %s", containerId), progress, nil, "", false)
+	exec.RunShell(fmt.Sprintf("docker service inspect %s", serviceName), progress, nil, "", false)
 	lst := collections.NewListFromChan(progress)
 	if lst.ContainsAny("no such service") {
 		return nil, nil
@@ -85,8 +85,8 @@ func (receiver service) Inspect(containerId string) (ServiceInspectJson, error) 
 }
 
 // Exists 服务是否存在
-func (receiver service) Exists(containerId string) (bool, error) {
-	serviceInspectJsons, err := receiver.Inspect(containerId)
+func (receiver service) Exists(serviceName string) (bool, error) {
+	serviceInspectJsons, err := receiver.Inspect(serviceName)
 	if err != nil && strings.Contains(err.Error(), " not found") {
 		return false, nil
 	}
@@ -97,11 +97,11 @@ func (receiver service) Exists(containerId string) (bool, error) {
 }
 
 // Create 创建服务
-func (receiver service) Create(containerId, dockerNodeRole, additionalScripts, dockerNetwork string, dockerReplicas int, dockerImages string, limitCpus float64, limitMemory string) error {
+func (receiver service) Create(serviceName, dockerNodeRole, additionalScripts, dockerNetwork string, dockerReplicas int, dockerImages string, limitCpus float64, limitMemory string) error {
 	c := make(chan string, 1000)
 	var sb bytes.Buffer
 	sb.WriteString("docker service create --with-registry-auth --mount type=bind,src=/etc/localtime,dst=/etc/localtime")
-	sb.WriteString(fmt.Sprintf(" --name %s -d --network=%s", containerId, dockerNetwork))
+	sb.WriteString(fmt.Sprintf(" --name %s -d --network=%s", serviceName, dockerNetwork))
 
 	// 所有节点都要运行
 	if dockerNodeRole == "global" {
@@ -126,10 +126,10 @@ func (receiver service) Create(containerId, dockerNodeRole, additionalScripts, d
 }
 
 // Logs 获取日志
-func (receiver service) Logs(containerId string, tailCount int) (collections.List[string], error) {
+func (receiver service) Logs(serviceIdOrServiceName string, tailCount int) (collections.List[string], error) {
 	progress := make(chan string, 1000)
 	// docker service logs fops
-	var exitCode = exec.RunShell(fmt.Sprintf("docker service logs %s --tail %d", containerId, tailCount), progress, nil, "", true)
+	var exitCode = exec.RunShell(fmt.Sprintf("docker service logs %s --tail %d", serviceIdOrServiceName, tailCount), progress, nil, "", true)
 	lst := collections.NewListFromChan(progress)
 	if exitCode != 0 {
 		return lst, fmt.Errorf("获取日志失败。")
@@ -173,10 +173,10 @@ func (receiver service) List() collections.List[ServiceListVO] {
 }
 
 // PS 获取容器运行的实例信息
-func (receiver service) PS(containerId string) collections.List[ServicePsVO] {
+func (receiver service) PS(serviceName string) collections.List[ServicePsVO] {
 	progress := make(chan string, 1000)
 	// docker service ps fops --format "table {{.ID}}|{{.Name}}|{{.Image}}|{{.Node}}|{{.DesiredState}}|{{.CurrentState}}|{{.Error}}"
-	var exitCode = exec.RunShell(fmt.Sprintf("docker service ps %s --format \"table {{.ID}}|{{.Name}}|{{.Image}}|{{.Node}}|{{.DesiredState}}|{{.CurrentState}}|{{.Error}}\"", containerId), progress, nil, "", false)
+	var exitCode = exec.RunShell(fmt.Sprintf("docker service ps %s --format \"table {{.ID}}|{{.Name}}|{{.Image}}|{{.Node}}|{{.DesiredState}}|{{.CurrentState}}|{{.Error}}\"", serviceName), progress, nil, "", false)
 	serviceList := collections.NewListFromChan(progress)
 	lstDockerInstance := collections.NewList[ServicePsVO]()
 	if exitCode != 0 || serviceList.Count() == 0 {
