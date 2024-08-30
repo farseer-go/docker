@@ -192,7 +192,7 @@ func (receiver service) PS(containerId string) collections.List[ServicePsVO] {
 			return
 		}
 		lstDockerInstance.Add(ServicePsVO{
-			Id:        sers[0],
+			ServiceId: sers[0],
 			Name:      sers[1],
 			Image:     sers[2],
 			Node:      sers[3],
