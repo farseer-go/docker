@@ -41,7 +41,7 @@ type DockerNodeVO struct {
 	Label              collections.List[DockerLabelVO] // 标签
 	CpuUsagePercent    float64                         // CPU使用百分比
 	MemoryUsagePercent float64                         // 内存使用百分比
-	MemoryUsage        uint64                          // 内存已使用
+	MemoryUsage        uint64                          // 内存已使用（MB）
 }
 
 // DockerLabelVO 标签
