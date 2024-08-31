@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/docker/docker/client"
 	"github.com/farseer-go/collections"
 	"github.com/farseer-go/fs/parse"
 	"github.com/farseer-go/utils/exec"
@@ -13,7 +12,6 @@ import (
 )
 
 type service struct {
-	dockerClient *client.Client
 }
 
 // Delete 删除容器服务

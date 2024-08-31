@@ -2,14 +2,12 @@ package docker
 
 import (
 	"fmt"
-	"github.com/docker/docker/client"
 	"github.com/farseer-go/collections"
 	"github.com/farseer-go/utils/exec"
 	"strings"
 )
 
 type node struct {
-	dockerClient *client.Client
 }
 
 // List 获取主机节点列表

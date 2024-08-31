@@ -1,49 +1,40 @@
 package docker
 
 import (
-	"context"
-	"github.com/docker/docker/client"
 	"github.com/farseer-go/collections"
-	"github.com/farseer-go/fs/flog"
 	"github.com/farseer-go/fs/parse"
 	"github.com/farseer-go/utils/exec"
+	"regexp"
 	"strings"
 )
 
 // Client docker client
 type Client struct {
-	dockerClient *client.Client
-	Container    container
-	Service      service
-	Node         node
-	Hub          hub
-	Images       images
+	//dockerClient *client.Client
+	Container container
+	Service   service
+	Node      node
+	Hub       hub
+	Images    images
 }
 
 // NewClient 实例化一个Client
-func NewClient() (*Client, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return nil, err
-	}
-	return &Client{
-		dockerClient: cli,
-		Container:    container{dockerClient: cli},
-		Service:      service{dockerClient: cli},
-		Node:         node{dockerClient: cli},
-		Hub:          hub{dockerClient: cli},
-		Images:       images{dockerClient: cli},
-	}, nil
+func NewClient() *Client {
+	return &Client{}
 }
 
 // GetVersion 获取系统Docker版本
 func (receiver Client) GetVersion() string {
-	version, err := receiver.dockerClient.ServerVersion(context.Background())
-	if err != nil {
-		flog.Warning(err.Error())
-		return ""
+	receiveOutput := make(chan string, 100)
+	exec.RunShell("docker version --format '{{.Server.Version}}'", receiveOutput, nil, "", false)
+	lst := collections.NewListFromChan(receiveOutput)
+	re := regexp.MustCompile(`^\d+\.\d+\.\d+$`)
+	for _, s := range lst.ToArray() {
+		if re.MatchString(s) {
+			return s
+		}
 	}
-	return version.Version
+	return ""
 }
 
 // Stats 获取所有容器的资源使用

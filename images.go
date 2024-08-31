@@ -2,13 +2,11 @@ package docker
 
 import (
 	"fmt"
-	"github.com/docker/docker/client"
 	"github.com/farseer-go/collections"
 	"github.com/farseer-go/utils/exec"
 )
 
 type images struct {
-	dockerClient *client.Client
 }
 
 // Pull 拉取镜像

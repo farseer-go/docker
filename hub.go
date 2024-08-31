@@ -2,14 +2,12 @@ package docker
 
 import (
 	"fmt"
-	"github.com/docker/docker/client"
 	"github.com/farseer-go/collections"
 	"github.com/farseer-go/utils/exec"
 	"strings"
 )
 
 type hub struct {
-	dockerClient *client.Client
 }
 
 // Login 登陆仓库
