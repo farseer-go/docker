@@ -42,6 +42,7 @@ type DockerNodeVO struct {
 	CpuUsagePercent    float64                         // CPU使用百分比
 	MemoryUsagePercent float64                         // 内存使用百分比
 	MemoryUsage        uint64                          // 内存已使用（MB）
+	AgentIP            string                     	   // 代理容器IP
 }
 
 // DockerLabelVO 标签
