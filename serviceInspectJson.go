@@ -50,6 +50,15 @@ type DockerLabelVO struct {
 	Value string // 标签值
 }
 
+// DockerStatsVO 容器的状态
+type DockerStatsVO struct {
+	ContainerID        string  // 容器ID
+	CpuUsagePercent    float64 // CPU使用百分比
+	MemoryUsagePercent float64 // 内存使用百分比
+	MemoryUsage        uint64  // 内存已使用（MB）
+	MemoryLimit        uint64  // 内存限制（MB）
+}
+
 // ServiceInspectJson 服务详情
 type ServiceInspectJson []struct {
 	ID      string `json:"ID"`
