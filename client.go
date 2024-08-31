@@ -62,7 +62,7 @@ func (receiver Client) Stats() collections.List[DockerStatsVO] {
 	serviceList.Foreach(func(service *string) {
 		// 95351953ac34|0.84%|0.43%|33.36MiB / 7.586GiB
 		sers := strings.Split(*service, "|")
-		if len(sers) < 5 {
+		if len(sers) != 4 {
 			return
 		}
 		dockerStatsVO := DockerStatsVO{
