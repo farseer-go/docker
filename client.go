@@ -51,7 +51,7 @@ func (receiver Client) Stats() collections.List[DockerStatsVO] {
 	// 移除标题
 	serviceList.RemoveAt(0)
 	serviceList.Foreach(func(service *string) {
-		// 95351953ac34|0.84%|0.43%|33.36MiB / 7.586GiB
+		// 7da109011988|0.00%|7.906MiB / 3.881GiB|0.20%
 		sers := strings.Split(*service, "|")
 		if len(sers) != 4 {
 			return
@@ -59,34 +59,34 @@ func (receiver Client) Stats() collections.List[DockerStatsVO] {
 		dockerStatsVO := DockerStatsVO{
 			ContainerID:        sers[0],
 			CpuUsagePercent:    parse.ToFloat64(strings.ReplaceAll(sers[1], "%", "")),
-			MemoryUsagePercent: parse.ToFloat64(strings.ReplaceAll(sers[2], "%", "")),
+			MemoryUsagePercent: parse.ToFloat64(strings.ReplaceAll(sers[3], "%", "")),
 		}
 
 		// 33.36MiB / 7.586GiB
-		memorys := strings.Split(sers[3], " / ")
+		memorys := strings.Split(sers[2], " / ")
 		if len(memorys) == 2 {
 			// 内存已使用（MB）memorys[0]
 			if strings.Contains(memorys[0], "MiB") {
 				memorys[0] = strings.ReplaceAll(memorys[0], "MiB", "")
-				dockerStatsVO.MemoryUsage = parse.ToUInt64(memorys[0])
+				dockerStatsVO.MemoryUsage = parse.ToUInt64(parse.ToFloat64(memorys[0]))
 			} else if strings.Contains(memorys[0], "GiB") {
 				memorys[0] = strings.ReplaceAll(memorys[0], "GiB", "")
-				dockerStatsVO.MemoryUsage = parse.ToUInt64(memorys[0]) * 1024
+				dockerStatsVO.MemoryUsage = parse.ToUInt64(parse.ToFloat64(memorys[0])) * 1024
 			} else if strings.Contains(memorys[0], "KiB") {
 				memorys[0] = strings.ReplaceAll(memorys[0], "KiB", "")
-				dockerStatsVO.MemoryUsage = parse.ToUInt64(memorys[0]) / 1024
+				dockerStatsVO.MemoryUsage = parse.ToUInt64(parse.ToFloat64(memorys[0])) / 1024
 			}
 
 			// 内存限制（MB）memorys[1]
 			if strings.Contains(memorys[1], "MiB") {
 				memorys[1] = strings.ReplaceAll(memorys[1], "MiB", "")
-				dockerStatsVO.MemoryLimit = parse.ToUInt64(memorys[1])
+				dockerStatsVO.MemoryLimit = parse.ToUInt64(parse.ToFloat64(memorys[1]))
 			} else if strings.Contains(memorys[1], "GiB") {
 				memorys[1] = strings.ReplaceAll(memorys[1], "GiB", "")
-				dockerStatsVO.MemoryLimit = parse.ToUInt64(memorys[1]) * 1024
+				dockerStatsVO.MemoryLimit = parse.ToUInt64(parse.ToFloat64(memorys[1]) * 1024)
 			} else if strings.Contains(memorys[1], "KiB") {
 				memorys[1] = strings.ReplaceAll(memorys[1], "KiB", "")
-				dockerStatsVO.MemoryLimit = parse.ToUInt64(memorys[1]) / 1024
+				dockerStatsVO.MemoryLimit = parse.ToUInt64(parse.ToFloat64(memorys[1]) / 1024)
 			}
 		}
 		lstDockerInstance.Add(dockerStatsVO)
