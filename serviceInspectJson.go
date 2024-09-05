@@ -39,10 +39,13 @@ type DockerNodeVO struct {
 	CPUs               string                          // CPU核心数
 	Memory             string                          // 内存
 	Label              collections.List[DockerLabelVO] // 标签
+	AgentIP            string                          // 代理容器IP
 	CpuUsagePercent    float64                         // CPU使用百分比
 	MemoryUsagePercent float64                         // 内存使用百分比
-	MemoryUsage        uint64                          // 内存已使用（MB）
-	AgentIP            string                     	   // 代理容器IP
+	MemoryUsage        float64                         // 内存已使用（MB）
+	Disk               uint64                          // 硬盘总容量（GB）
+	DiskUsagePercent   float64                         // 硬盘使用百分比
+	DiskUsage          float64                         // 硬盘已用空间（GB）
 }
 
 // DockerLabelVO 标签
