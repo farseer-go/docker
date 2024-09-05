@@ -159,5 +159,9 @@ func (receiver container) InspectByServiceId(serviceId string) (ServiceIdInspect
 	serviceInspectContent := lst.ToString("\n")
 	err := json.Unmarshal([]byte(serviceInspectContent), &serviceIdInspectJson)
 
+	// 使用简短的容器ID
+	if len(serviceIdInspectJson[0].Status.ContainerStatus.ContainerID) >= 12 {
+		serviceIdInspectJson[0].Status.ContainerStatus.ContainerID = serviceIdInspectJson[0].Status.ContainerStatus.ContainerID[:12]
+	}
 	return serviceIdInspectJson, err
 }
