@@ -22,7 +22,7 @@ func (receiver images) Pull(image string) error {
 // ClearImages 清除镜像
 func (receiver images) ClearImages() error {
 	c := make(chan string, 100)
-	var exitCode = exec.RunShell(`docker rmi $(docker images -f "dangling=true" -q) && docker builder prune -f && docker system prune -f`, c, nil, "", false)
+	var exitCode = exec.RunShell(`docker system prune -a -f`, c, nil, "", false)
 	if exitCode != 0 {
 		return fmt.Errorf(collections.NewListFromChan(c).ToString("\n"))
 	}
