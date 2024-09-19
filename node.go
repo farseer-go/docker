@@ -87,10 +87,13 @@ func (receiver node) Info(nodeName string) DockerNodeVO {
 				}
 				// 移除标签
 				content = strings.TrimSpace(content[len(tag):])
-				vo.Label.Add(DockerLabelVO{
-					Name:  strings.Split(content, "=")[0],
-					Value: strings.Split(content, "=")[1],
-				})
+				kvs := strings.Split(content, "=")
+				if len(kvs) > 1 {
+					vo.Label.Add(DockerLabelVO{
+						Name:  kvs[0],
+						Value: kvs[1],
+					})
+				}
 			}
 		}
 	})

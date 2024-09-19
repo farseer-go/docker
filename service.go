@@ -159,11 +159,15 @@ func (receiver service) List() collections.List[ServiceListVO] {
 		if len(sers) < 4 {
 			return
 		}
+		insRepl := strings.Split(sers[2], "/")
+		if len(insRepl) < 2 {
+			insRepl = append(insRepl, "0")
+		}
 		lstDockerName.Add(ServiceListVO{
 			Id:        sers[0],
 			Name:      sers[1],
-			Instances: parse.ToInt(strings.Split(sers[2], "/")[0]),
-			Replicas:  parse.ToInt(strings.Split(sers[2], "/")[1]),
+			Instances: parse.ToInt(insRepl[0]),
+			Replicas:  parse.ToInt(insRepl[1]),
 			Image:     sers[3],
 		})
 	})
