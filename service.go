@@ -5,10 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"github.com/farseer-go/collections"
 	"github.com/farseer-go/fs/parse"
 	"github.com/farseer-go/utils/exec"
-	"strings"
 )
 
 type service struct {
@@ -101,10 +102,13 @@ func (receiver service) Create(serviceName, dockerNodeRole, additionalScripts, d
 	sb.WriteString("docker service create --with-registry-auth --mount type=bind,src=/etc/localtime,dst=/etc/localtime")
 	sb.WriteString(fmt.Sprintf(" --name %s -d --network=%s", serviceName, dockerNetwork))
 
-	// 所有节点都要运行
-	if dockerNodeRole == "global" {
+	// 节点筛选
+	switch dockerNodeRole {
+	case "global", "GLOBAL":
 		sb.WriteString(" --mode global")
-	} else {
+	case "":
+		sb.WriteString(fmt.Sprintf("  --replicas %v", dockerReplicas))
+	default:
 		sb.WriteString(fmt.Sprintf("  --replicas %v --constraint node.role==%s", dockerReplicas, dockerNodeRole))
 	}
 
