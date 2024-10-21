@@ -5,9 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
+
 	"github.com/farseer-go/collections"
 	"github.com/farseer-go/utils/exec"
-	"path"
 )
 
 type container struct {
@@ -73,6 +74,11 @@ func (receiver container) Run(containerId string, networkName string, dockerImag
 	return nil
 }
 
+// Restart 重启容器
+func (receiver container) Restart(containerId string) {
+	exec.RunShell(fmt.Sprintf("docker restart %s", containerId), make(chan string, 1000), nil, "", false)
+}
+
 func (receiver container) Exec(containerId string, execCmd string, env map[string]string, progress chan string, ctx context.Context) error {
 	if env == nil {
 		env = make(map[string]string)
@@ -80,7 +86,7 @@ func (receiver container) Exec(containerId string, execCmd string, env map[strin
 	env["BASH_ENV"] = "\"/root/.bashrc\""
 
 	bf := bytes.Buffer{}
-	bf.WriteString("docker exec ") // docker exec FOPS-Build-hub-fsgit-cc-fops-130 echo aaa
+	bf.WriteString("docker exec ") // docker exec FOPS-Build /bin/bash -c "xxxx.sh"
 	for k, v := range env {
 		bf.WriteString(fmt.Sprintf("-e %s=%s ", k, v))
 	}
