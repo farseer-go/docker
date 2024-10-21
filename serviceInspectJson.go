@@ -1,8 +1,9 @@
 package docker
 
 import (
-	"github.com/farseer-go/collections"
 	"time"
+
+	"github.com/farseer-go/collections"
 )
 
 // ServiceListVO 容器的名称 实例数量 副本数量 镜像（docker service ls）
