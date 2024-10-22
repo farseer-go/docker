@@ -64,9 +64,10 @@ func (receiver service) Restart(serviceName string) error {
 
 // Inspect 查看服务详情
 func (receiver service) Inspect(serviceName string) (ServiceInspectJson, error) {
+	progress := make(chan string, 5000)
 	// docker service inspect fops
-	exec.RunShell(fmt.Sprintf("docker service inspect %s", serviceName), receiver.progress, nil, "", false)
-	lst := collections.NewListFromChan(receiver.progress)
+	exec.RunShell(fmt.Sprintf("docker service inspect %s", serviceName), progress, nil, "", false)
+	lst := collections.NewListFromChan(progress)
 	if lst.ContainsAny("no such service") {
 		return nil, nil
 	}
@@ -123,9 +124,10 @@ func (receiver service) Create(serviceName, dockerNodeRole, additionalScripts, d
 
 // Logs 获取日志
 func (receiver service) Logs(serviceIdOrServiceName string, tailCount int) (collections.List[string], error) {
+	progress := make(chan string, 5000)
 	// docker service logs fops
-	var exitCode = exec.RunShell(fmt.Sprintf("docker service logs %s --tail %d", serviceIdOrServiceName, tailCount), receiver.progress, nil, "", true)
-	lst := collections.NewListFromChan(receiver.progress)
+	var exitCode = exec.RunShell(fmt.Sprintf("docker service logs %s --tail %d", serviceIdOrServiceName, tailCount), progress, nil, "", true)
+	lst := collections.NewListFromChan(progress)
 	if exitCode != 0 {
 		return lst, fmt.Errorf("获取日志失败。")
 	}
@@ -139,9 +141,10 @@ func (receiver service) Logs(serviceIdOrServiceName string, tailCount int) (coll
 
 // List 获取所有Service
 func (receiver service) List() collections.List[ServiceListVO] {
+	progress := make(chan string, 5000)
 	// docker service ls --format "table {{.ID}}|{{.Name}}|{{.Mode}}|{{.Replicas}}|{{.Image}}|{{.Ports}}"
-	var exitCode = exec.RunShell("docker service ls --format \"table {{.ID}}|{{.Name}}|{{.Replicas}}|{{.Image}}\"", receiver.progress, nil, "", false)
-	serviceList := collections.NewListFromChan(receiver.progress)
+	var exitCode = exec.RunShell("docker service ls --format \"table {{.ID}}|{{.Name}}|{{.Replicas}}|{{.Image}}\"", progress, nil, "", false)
+	serviceList := collections.NewListFromChan(progress)
 	lstDockerName := collections.NewList[ServiceListVO]()
 	if exitCode != 0 || serviceList.Count() == 0 {
 		return lstDockerName
@@ -172,9 +175,10 @@ func (receiver service) List() collections.List[ServiceListVO] {
 
 // PS 获取容器运行的实例信息
 func (receiver service) PS(serviceName string) collections.List[ServicePsVO] {
+	progress := make(chan string, 5000)
 	// docker service ps fops --format "table {{.ID}}|{{.Name}}|{{.Image}}|{{.Node}}|{{.DesiredState}}|{{.CurrentState}}|{{.Error}}"
-	var exitCode = exec.RunShell(fmt.Sprintf("docker service ps %s --format \"table {{.ID}}|{{.Name}}|{{.Image}}|{{.Node}}|{{.DesiredState}}|{{.CurrentState}}|{{.Error}}\"", serviceName), receiver.progress, nil, "", false)
-	serviceList := collections.NewListFromChan(receiver.progress)
+	var exitCode = exec.RunShell(fmt.Sprintf("docker service ps %s --format \"table {{.ID}}|{{.Name}}|{{.Image}}|{{.Node}}|{{.DesiredState}}|{{.CurrentState}}|{{.Error}}\"", serviceName), progress, nil, "", false)
+	serviceList := collections.NewListFromChan(progress)
 	lstDockerInstance := collections.NewList[ServicePsVO]()
 	if exitCode != 0 || serviceList.Count() == 0 {
 		return lstDockerInstance
