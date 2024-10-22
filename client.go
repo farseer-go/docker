@@ -1,11 +1,12 @@
 package docker
 
 import (
+	"regexp"
+	"strings"
+
 	"github.com/farseer-go/collections"
 	"github.com/farseer-go/fs/parse"
 	"github.com/farseer-go/utils/exec"
-	"regexp"
-	"strings"
 )
 
 // Client docker client
@@ -20,7 +21,18 @@ type Client struct {
 
 // NewClient 实例化一个Client
 func NewClient() *Client {
-	return &Client{}
+	client := &Client{}
+	client.SetChar(make(chan string, 10000))
+	return client
+}
+
+// 设置接收消息的通道
+func (receiver *Client) SetChar(c chan string) {
+	receiver.Container.progress = c
+	receiver.Service.progress = c
+	receiver.Node.progress = c
+	receiver.Hub.progress = c
+	receiver.Images.progress = c
 }
 
 // GetVersion 获取系统Docker版本

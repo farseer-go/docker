@@ -2,12 +2,14 @@ package docker
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/farseer-go/collections"
 	"github.com/farseer-go/utils/exec"
-	"strings"
 )
 
 type hub struct {
+	progress chan string
 }
 
 // Login 登陆仓库
@@ -18,10 +20,9 @@ func (receiver hub) Login(dockerHub string, loginName string, loginPwd string) e
 			dockerHub = ""
 		}
 
-		c := make(chan string, 100)
-		var result = exec.RunShell("docker login "+dockerHub+" -u "+loginName+" -p "+loginPwd, c, nil, "", true)
+		var result = exec.RunShell("docker login "+dockerHub+" -u "+loginName+" -p "+loginPwd, receiver.progress, nil, "", true)
 		if result != 0 {
-			return fmt.Errorf(collections.NewListFromChan(c).ToString("\n"))
+			return fmt.Errorf(collections.NewListFromChan(receiver.progress).ToString("\n"))
 		}
 	}
 	return nil

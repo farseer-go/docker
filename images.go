@@ -2,29 +2,29 @@ package docker
 
 import (
 	"fmt"
+
 	"github.com/farseer-go/collections"
 	"github.com/farseer-go/utils/exec"
 )
 
 type images struct {
+	progress chan string
 }
 
 // Pull 拉取镜像
 func (receiver images) Pull(image string) error {
-	c := make(chan string, 100)
-	exitCode := exec.RunShell(fmt.Sprintf("docker pull %s", image), c, nil, "", true)
+	exitCode := exec.RunShell(fmt.Sprintf("docker pull %s", image), receiver.progress, nil, "", true)
 	if exitCode != 0 {
-		return fmt.Errorf(collections.NewListFromChan(c).ToString("\n"))
+		return fmt.Errorf(collections.NewListFromChan(receiver.progress).ToString("\n"))
 	}
 	return nil
 }
 
 // ClearImages 清除镜像
 func (receiver images) ClearImages() error {
-	c := make(chan string, 100)
-	var exitCode = exec.RunShell(`docker system prune -a -f`, c, nil, "", false)
+	var exitCode = exec.RunShell(`docker system prune -a -f`, receiver.progress, nil, "", false)
 	if exitCode != 0 {
-		return fmt.Errorf(collections.NewListFromChan(c).ToString("\n"))
+		return fmt.Errorf(collections.NewListFromChan(receiver.progress).ToString("\n"))
 	}
 	return nil
 }
