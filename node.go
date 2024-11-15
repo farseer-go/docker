@@ -64,6 +64,10 @@ func (receiver node) Info(nodeName string) DockerNodeVO {
 
 		switch name {
 		case "Address":
+			// 跳过Manager Status
+			if strings.Contains(val, ":") {
+				return
+			}
 			vo.IP = val
 		case "Operating System":
 			vo.OS = val
