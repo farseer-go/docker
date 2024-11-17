@@ -28,7 +28,7 @@ func (receiver service) Delete(serviceName string) error {
 
 // SetImagesAndReplicas 更新镜像版本和副本数量
 func (receiver service) SetImagesAndReplicas(serviceName string, dockerImages string, dockerReplicas int) error {
-	var exitCode = exec.RunShell(fmt.Sprintf("docker service update --image %s --replicas %v --update-delay 10s --with-registry-auth %s", dockerImages, dockerReplicas, serviceName), receiver.progress, nil, "", false)
+	var exitCode = exec.RunShell(fmt.Sprintf("docker service update --image %s --replicas %v --with-registry-auth %s", dockerImages, dockerReplicas, serviceName), receiver.progress, nil, "", false)
 	if exitCode != 0 {
 		return fmt.Errorf(collections.NewListFromChan(receiver.progress).ToString("\n"))
 	}
@@ -36,8 +36,18 @@ func (receiver service) SetImagesAndReplicas(serviceName string, dockerImages st
 }
 
 // SetImages 更新镜像版本
-func (receiver service) SetImages(serviceName string, dockerImages string) error {
-	var exitCode = exec.RunShell(fmt.Sprintf("docker service update --image %s --update-delay 10s --with-registry-auth %s", dockerImages, serviceName), receiver.progress, nil, "", true)
+func (receiver service) SetImages(serviceName string, dockerImages string, updateDelay int) error {
+	var sb bytes.Buffer
+	sb.WriteString(fmt.Sprintf("docker service update --image %s  --with-registry-auth", dockerImages))
+
+	// 滚动更新时的时间间隔
+	if updateDelay > 0 {
+		sb.WriteString(fmt.Sprintf(" --update-delay=%ds", updateDelay))
+	}
+
+	sb.WriteString(fmt.Sprintf(" %s", serviceName))
+
+	var exitCode = exec.RunShell(sb.String(), receiver.progress, nil, "", true)
 	if exitCode != 0 {
 		return fmt.Errorf(collections.NewListFromChan(receiver.progress).ToString("\n"))
 	}
