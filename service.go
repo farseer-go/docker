@@ -3,10 +3,11 @@ package docker
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+
 	"fmt"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	"github.com/farseer-go/collections"
 	"github.com/farseer-go/fs/parse"
 	"github.com/farseer-go/utils/exec"
@@ -84,7 +85,7 @@ func (receiver service) Inspect(serviceName string) (ServiceInspectJson, error) 
 
 	var serviceInspectJson ServiceInspectJson
 	serviceInspectContent := lst.ToString("\n")
-	err := json.Unmarshal([]byte(serviceInspectContent), &serviceInspectJson)
+	err := sonic.Unmarshal([]byte(serviceInspectContent), &serviceInspectJson)
 
 	return serviceInspectJson, err
 }
