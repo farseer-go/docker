@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"path"
 
-	"github.com/bytedance/sonic"
 	"github.com/farseer-go/collections"
+	"github.com/farseer-go/fs/snc"
 	"github.com/farseer-go/utils/exec"
 )
 
@@ -147,7 +147,7 @@ func (receiver container) Inspect(containerId string) (ContainerIdInspectJson, e
 
 	var containerInspectJson ContainerIdInspectJson
 	serviceInspectContent := lst.ToString("\n")
-	err := sonic.Unmarshal([]byte(serviceInspectContent), &containerInspectJson)
+	err := snc.Unmarshal([]byte(serviceInspectContent), &containerInspectJson)
 
 	return containerInspectJson, err
 }
@@ -164,7 +164,7 @@ func (receiver container) InspectByServiceId(serviceId string) (ServiceIdInspect
 
 	var serviceIdInspectJson ServiceIdInspectJson
 	serviceInspectContent := lst.ToString("\n")
-	err := sonic.Unmarshal([]byte(serviceInspectContent), &serviceIdInspectJson)
+	err := snc.Unmarshal([]byte(serviceInspectContent), &serviceIdInspectJson)
 	// 使用简短的容器ID
 	if len(serviceIdInspectJson) > 0 && len(serviceIdInspectJson[0].Status.ContainerStatus.ContainerID) >= 12 {
 		serviceIdInspectJson[0].Status.ContainerStatus.ContainerID = serviceIdInspectJson[0].Status.ContainerStatus.ContainerID[:12]

@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bytedance/sonic"
 	"github.com/farseer-go/collections"
 	"github.com/farseer-go/fs/parse"
+	"github.com/farseer-go/fs/snc"
 	"github.com/farseer-go/utils/exec"
 )
 
@@ -85,7 +85,7 @@ func (receiver service) Inspect(serviceName string) (ServiceInspectJson, error) 
 
 	var serviceInspectJson ServiceInspectJson
 	serviceInspectContent := lst.ToString("\n")
-	err := sonic.Unmarshal([]byte(serviceInspectContent), &serviceInspectJson)
+	err := snc.Unmarshal([]byte(serviceInspectContent), &serviceInspectJson)
 
 	return serviceInspectJson, err
 }
