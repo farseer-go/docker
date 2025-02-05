@@ -105,3 +105,11 @@ func (receiver Client) Stats() collections.List[DockerStatsVO] {
 	})
 	return lstDockerInstance
 }
+
+// 当前节点是否为主节点
+func (receiver Client) IsMaster() bool {
+	receiveOutput := make(chan string, 100)
+	exec.RunShell("docker info --format '{{.Swarm.ControlAvailable}}'", receiveOutput, nil, "", false)
+	lst := collections.NewListFromChan(receiveOutput)
+	return lst.Contains("true")
+}
