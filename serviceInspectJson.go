@@ -46,7 +46,7 @@ type DockerNodeVO struct {
 	Disk               uint64                          // 硬盘总容量（GB）
 	DiskUsagePercent   float64                         // 硬盘使用百分比
 	DiskUsage          float64                         // 硬盘已用空间（GB）
-	//AgentIP            string                          // 代理容器IP
+	UpdateAt           time.Time                       // 更新时间
 }
 
 // DockerLabelVO 标签
