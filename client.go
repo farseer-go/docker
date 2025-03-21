@@ -121,3 +121,11 @@ func (receiver Client) GetHostIP() string {
 	lst := collections.NewListFromChan(receiveOutput)
 	return lst.First()
 }
+
+// 获取主机IP
+func (receiver Client) GetHostName() string {
+	receiveOutput := make(chan string, 100)
+	exec.RunShell("docker info --format '{{.Name}}'", receiveOutput, nil, "", false)
+	lst := collections.NewListFromChan(receiveOutput)
+	return lst.First()
+}
