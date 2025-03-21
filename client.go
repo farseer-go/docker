@@ -113,3 +113,11 @@ func (receiver Client) IsMaster() bool {
 	lst := collections.NewListFromChan(receiveOutput)
 	return lst.Contains("true")
 }
+
+// 获取主机IP
+func (receiver Client) GetHostIP() string {
+	receiveOutput := make(chan string, 100)
+	exec.RunShell("docker info --format '{{.Swarm.NodeAddr}}'", receiveOutput, nil, "", false)
+	lst := collections.NewListFromChan(receiveOutput)
+	return lst.First()
+}
