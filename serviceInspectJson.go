@@ -34,19 +34,19 @@ type DockerNodeVO struct {
 	IsMaster           bool                            // 是否为主节点
 	IsHealth           bool                            // 应用是否健康
 	EngineVersion      string                          // 引擎版本
-	IP                 string                          // 节点IP
+	IP                 string                          // 节点IP（主机IP）
 	OS                 string                          // 操作系统
 	Architecture       string                          // 架构
 	CPUs               string                          // CPU核心数
 	Memory             string                          // 内存
 	Label              collections.List[DockerLabelVO] // 标签
-	AgentIP            string                          // 代理容器IP
 	CpuUsagePercent    float64                         // CPU使用百分比
 	MemoryUsagePercent float64                         // 内存使用百分比
 	MemoryUsage        float64                         // 内存已使用（MB）
 	Disk               uint64                          // 硬盘总容量（GB）
 	DiskUsagePercent   float64                         // 硬盘使用百分比
 	DiskUsage          float64                         // 硬盘已用空间（GB）
+	//AgentIP            string                          // 代理容器IP
 }
 
 // DockerLabelVO 标签

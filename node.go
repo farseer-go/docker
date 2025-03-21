@@ -37,6 +37,7 @@ func (receiver node) List() collections.List[DockerNodeVO] {
 			Availability:  sers[2],
 			IsMaster:      sers[3] == "Leader",
 			EngineVersion: sers[4],
+			IsHealth:      sers[1] == "Ready" && sers[2] == "Active",
 		})
 	})
 	return lstDockerInstance
