@@ -43,7 +43,7 @@ type DockerNodeVO struct {
 	CpuUsagePercent    float64                         // CPU使用百分比
 	MemoryUsagePercent float64                         // 内存使用百分比
 	MemoryUsage        float64                         // 内存已使用（MB）
-	Disk               uint64                          // 硬盘总容量（GB）
+	Disk               string                          // 硬盘总容量（GB）
 	DiskUsagePercent   float64                         // 硬盘使用百分比
 	DiskUsage          float64                         // 硬盘已用空间（GB）
 	UpdateAt           time.Time                       // 更新时间
