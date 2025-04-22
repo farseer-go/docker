@@ -43,10 +43,16 @@ type DockerNodeVO struct {
 	CpuUsagePercent    float64                         // CPU使用百分比
 	MemoryUsagePercent float64                         // 内存使用百分比
 	MemoryUsage        float64                         // 内存已使用（MB）
-	Disk               string                          // 硬盘总容量（GB）
-	DiskUsagePercent   float64                         // 硬盘使用百分比
-	DiskUsage          float64                         // 硬盘已用空间（GB）
+	DiskTotal          string                          // 硬盘总容量（GB）
+	Disk               []DiskVO                        // 硬盘容量
 	UpdateAt           time.Time                       // 更新时间
+}
+
+type DiskVO struct {
+	Path             string  // 硬盘路径
+	Disk             string  // 硬盘总容量（GB）
+	DiskUsagePercent float64 // 硬盘使用百分比
+	DiskUsage        float64 // 硬盘已用空间（GB）
 }
 
 // DockerLabelVO 标签
