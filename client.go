@@ -17,6 +17,7 @@ type Client struct {
 	Node      node
 	Hub       hub
 	Images    images
+	Event     event
 }
 
 // NewClient 实例化一个Client
@@ -33,6 +34,7 @@ func (receiver *Client) SetChar(c chan string) {
 	receiver.Node.progress = c
 	receiver.Hub.progress = c
 	receiver.Images.progress = c
+	receiver.Event.progress = c
 }
 
 // GetVersion 获取系统Docker版本
