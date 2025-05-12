@@ -21,7 +21,7 @@ func (receiver event) Watch() chan EventResult {
 		}
 	}()
 	go func() {
-		exec.RunShell("docker events --filter 'type=container' --format '{{json .}}'", receiver.progress, nil, "", false)
+		exec.RunShell("docker events --format '{{json .}}'", receiver.progress, nil, "", false)
 		close(eventResultChan)
 	}()
 	return eventResultChan

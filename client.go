@@ -6,6 +6,7 @@ import (
 
 	"github.com/farseer-go/collections"
 	"github.com/farseer-go/fs/parse"
+	"github.com/farseer-go/fs/snc"
 	"github.com/farseer-go/utils/exec"
 )
 
@@ -130,4 +131,21 @@ func (receiver Client) GetHostName() string {
 	exec.RunShell("docker info --format '{{.Name}}'", receiveOutput, nil, "", false)
 	lst := collections.NewListFromChan(receiveOutput)
 	return lst.First()
+}
+
+// 获取主机信息
+func (receiver Client) GetInfo() DockerInfo {
+	receiveOutput := make(chan string, 100)
+	exec.RunShell("docker info --format '{\"NodeAddr\":\"{{.Swarm.NodeAddr}}\",\"HostName\":\"{{.Name}}\",\"IsMaster\":{{.Swarm.ControlAvailable}},\"Version\":\"{{.ServerVersion}}\"}'", receiveOutput, nil, "", false)
+	json := collections.NewListFromChan(receiveOutput).First()
+	var dockerInfo DockerInfo
+	snc.Unmarshal([]byte(json), &dockerInfo)
+	return dockerInfo
+}
+
+type DockerInfo struct {
+	NodeAddr string `json:"NodeAddr"`
+	HostName string `json:"HostName"`
+	IsMaster bool   `json:"IsMaster"`
+	Version  string `json:"Version"`
 }
