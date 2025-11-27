@@ -185,12 +185,12 @@ func (receiver service) List() collections.List[ServiceListVO] {
 }
 
 // PS 获取容器运行的实例信息
-func (receiver service) PS(serviceName string) collections.List[ServicePsVO] {
+func (receiver service) PS(serviceName string) collections.List[TaskInstanceVO] {
 	progress := make(chan string, 5000)
 	// docker service ps fops --format "table {{.ID}}|{{.Name}}|{{.Image}}|{{.Node}}|{{.DesiredState}}|{{.CurrentState}}|{{.Error}}"
 	var exitCode = exec.RunShell(fmt.Sprintf("docker service ps %s --format \"table {{.ID}}|{{.Name}}|{{.Image}}|{{.Node}}|{{.DesiredState}}|{{.CurrentState}}|{{.Error}}\"", serviceName), progress, nil, "", false)
 	serviceList := collections.NewListFromChan(progress)
-	lstDockerInstance := collections.NewList[ServicePsVO]()
+	lstDockerInstance := collections.NewList[TaskInstanceVO]()
 	if exitCode != 0 || serviceList.Count() == 0 {
 		return lstDockerInstance
 	}
@@ -203,8 +203,8 @@ func (receiver service) PS(serviceName string) collections.List[ServicePsVO] {
 		if len(sers) < 7 {
 			return
 		}
-		lstDockerInstance.Add(ServicePsVO{
-			ServiceId: sers[0],
+		lstDockerInstance.Add(TaskInstanceVO{
+			TaskId:    sers[0],
 			Name:      sers[1],
 			Image:     sers[2],
 			Node:      sers[3],

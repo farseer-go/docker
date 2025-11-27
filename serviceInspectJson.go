@@ -15,9 +15,9 @@ type ServiceListVO struct {
 	Image     string // 镜像
 }
 
-// ServicePsVO 容器的实例信息 docker service ps fops
-type ServicePsVO struct {
-	ServiceId string // 服务ID
+// TaskInstanceVO 容器的实例信息 docker service ps fops
+type TaskInstanceVO struct {
+	TaskId    string // 任务ID
 	Name      string // 容器名称
 	Image     string // 镜像
 	Node      string // 节点
