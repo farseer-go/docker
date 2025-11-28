@@ -64,6 +64,9 @@ type DockerLabelVO struct {
 // DockerStatsVO 容器的状态
 type DockerStatsVO struct {
 	ContainerID        string  // 容器ID
+	ContainerName      string  // 容器名称 + 实例数字
+	Name               string  // 应用名称
+	TaskId             string  // 任务ID（host下的service查到的taskId)
 	CpuUsagePercent    float64 // CPU使用百分比
 	MemoryUsagePercent float64 // 内存使用百分比
 	MemoryUsage        uint64  // 内存已使用（MB）

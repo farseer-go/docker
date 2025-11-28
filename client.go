@@ -55,8 +55,8 @@ func (receiver Client) GetVersion() string {
 // Stats 获取所有容器的资源使用
 func (receiver Client) Stats() collections.List[DockerStatsVO] {
 	progress := make(chan string, 1000)
-	// docker stats --format "table {{.Container}}|{{.CPUPerc}}|{{.MemUsage}}|{{.MemPerc}}" --no-stream
-	var exitCode = exec.RunShell("docker stats --format \"table {{.Container}}|{{.CPUPerc}}|{{.MemUsage}}|{{.MemPerc}}\" --no-stream", progress, nil, "", false)
+	// docker stats --format "table {{.Container}}|{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}|{{.MemPerc}}" --no-stream
+	var exitCode = exec.RunShell("docker stats --format \"table {{.Container}}|{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}|{{.MemPerc}}\" --no-stream", progress, nil, "", false)
 	serviceList := collections.NewListFromChan(progress)
 	lstDockerInstance := collections.NewList[DockerStatsVO]()
 	if exitCode != 0 || serviceList.Count() == 0 {
@@ -66,19 +66,30 @@ func (receiver Client) Stats() collections.List[DockerStatsVO] {
 	// 移除标题
 	serviceList.RemoveAt(0)
 	serviceList.Foreach(func(service *string) {
-		// 7da109011988|0.00%|7.906MiB / 3.881GiB|0.20%
+		// ba487c8d0cf1|fops.1.l7c3377cnjacuy9xtz88resrw|38.71%|268.3MiB / 3GiB|8.73%
 		sers := strings.Split(*service, "|")
-		if len(sers) != 4 {
+		if len(sers) != 5 {
 			return
 		}
+		// fops.1.l7c3377cnjacuy9xtz88resrw
+		names := strings.Split(sers[1], ".")
+		// 补齐到3
+		if len(names) < 3 {
+			names = append(names, make([]string, 3-len(names))...)
+		}
+		// taskId 最多取12位
+		names[2] = names[2][:min(len(names[2]), 12)]
 		dockerStatsVO := DockerStatsVO{
 			ContainerID:        sers[0],
-			CpuUsagePercent:    parse.ToFloat64(strings.ReplaceAll(sers[1], "%", "")),
-			MemoryUsagePercent: parse.ToFloat64(strings.ReplaceAll(sers[3], "%", "")),
+			ContainerName:      names[0] + "." + names[1],
+			Name:               names[0],
+			TaskId:             names[2],
+			CpuUsagePercent:    parse.ToFloat64(strings.ReplaceAll(sers[2], "%", "")),
+			MemoryUsagePercent: parse.ToFloat64(strings.ReplaceAll(sers[4], "%", "")),
 		}
 
 		// 33.36MiB / 7.586GiB
-		memorys := strings.Split(sers[2], " / ")
+		memorys := strings.Split(sers[3], " / ")
 		if len(memorys) == 2 {
 			// 内存已使用（MB）memorys[0]
 			if strings.Contains(memorys[0], "MiB") {
