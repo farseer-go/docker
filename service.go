@@ -29,7 +29,7 @@ func (receiver service) Delete(serviceName string) error {
 
 // SetImagesAndReplicas 更新镜像版本和副本数量
 func (receiver service) SetImagesAndReplicas(serviceName string, dockerImages string, dockerReplicas int) error {
-	var exitCode = exec.RunShell(fmt.Sprintf("docker service update --image %s --replicas %v --with-registry-auth %s", dockerImages, dockerReplicas, serviceName), receiver.progress, nil, "", false)
+	var exitCode = exec.RunShell(fmt.Sprintf("docker service update --image %s --replicas %v --with-registry-auth %s --update-order start-first", dockerImages, dockerReplicas, serviceName), receiver.progress, nil, "", false)
 	if exitCode != 0 {
 		return fmt.Errorf(collections.NewListFromChan(receiver.progress).ToString("\n"))
 	}
@@ -39,7 +39,7 @@ func (receiver service) SetImagesAndReplicas(serviceName string, dockerImages st
 // SetImages 更新镜像版本
 func (receiver service) SetImages(serviceName string, dockerImages string, updateDelay int) error {
 	var sb bytes.Buffer
-	sb.WriteString(fmt.Sprintf("docker service update --image %s  --with-registry-auth", dockerImages))
+	sb.WriteString(fmt.Sprintf("docker service update --image %s  --with-registry-auth --update-order start-first", dockerImages))
 
 	// 滚动更新时的时间间隔
 	if updateDelay > 0 {
@@ -107,6 +107,7 @@ func (receiver service) Create(serviceName, dockerNodeRole, additionalScripts, d
 	var sb bytes.Buffer
 	sb.WriteString("docker service create --with-registry-auth --mount type=bind,src=/etc/localtime,dst=/etc/localtime")
 	sb.WriteString(fmt.Sprintf(" --name %s -d --network=%s", serviceName, dockerNetwork))
+	sb.WriteString(" --update-order start-first")
 
 	// 节点筛选
 	switch dockerNodeRole {
