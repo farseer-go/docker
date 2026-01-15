@@ -9,15 +9,13 @@ import (
 )
 
 type node struct {
-	progress chan string
+	//progress chan string
 }
 
 // List 获取主机节点列表
 func (receiver node) List() collections.List[DockerNodeVO] {
-	progress := make(chan string, 5000)
 	// docker node ls --format "table {{.Hostname}}|{{.Status}}|{{.Availability}}|{{.ManagerStatus}}|{{.EngineVersion}}"
-	var exitCode = exec.RunShell("docker node ls --format \"table {{.Hostname}}|{{.Status}}|{{.Availability}}|{{.ManagerStatus}}|{{.EngineVersion}}\"", progress, nil, "", false)
-	serviceList := collections.NewListFromChan(progress)
+	serviceList, exitCode := exec.RunShellCommand("docker node ls --format \"table {{.Hostname}}|{{.Status}}|{{.Availability}}|{{.ManagerStatus}}|{{.EngineVersion}}\"", nil, "", false)
 	lstDockerInstance := collections.NewList[DockerNodeVO]()
 	if exitCode != 0 || serviceList.Count() == 0 {
 		return lstDockerInstance
@@ -45,10 +43,8 @@ func (receiver node) List() collections.List[DockerNodeVO] {
 
 // Info 获取节点详情
 func (receiver node) Info(nodeName string) DockerNodeVO {
-	progress := make(chan string, 5000)
 	// docker node inspect node_1 --pretty
-	var exitCode = exec.RunShell(fmt.Sprintf("docker node inspect %s --pretty", nodeName), progress, nil, "", false)
-	serviceList := collections.NewListFromChan(progress)
+	serviceList, exitCode := exec.RunShellCommand(fmt.Sprintf("docker node inspect %s --pretty", nodeName), nil, "", false)
 	vo := DockerNodeVO{
 		Label: collections.NewList[DockerLabelVO](),
 	}

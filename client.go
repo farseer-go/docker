@@ -24,25 +24,22 @@ type Client struct {
 // NewClient 实例化一个Client
 func NewClient() *Client {
 	client := &Client{}
-	client.SetChar(make(chan string, 10000))
 	return client
 }
 
 // 设置接收消息的通道
-func (receiver *Client) SetChar(c chan string) {
-	receiver.Container.progress = c
-	receiver.Service.progress = c
-	receiver.Node.progress = c
-	receiver.Hub.progress = c
-	receiver.Images.progress = c
-	receiver.Event.progress = c
-}
+// func (receiver *Client) SetChar(c chan string) {
+// 	receiver.Container.progress = c
+// 	receiver.Service.progress = c
+// 	receiver.Node.progress = c
+// 	receiver.Hub.progress = c
+// 	receiver.Images.progress = c
+// 	receiver.Event.progress = c
+// }
 
 // GetVersion 获取系统Docker版本
 func (receiver Client) GetVersion() string {
-	receiveOutput := make(chan string, 100)
-	exec.RunShell("docker version --format '{{.Server.Version}}'", receiveOutput, nil, "", false)
-	lst := collections.NewListFromChan(receiveOutput)
+	lst, _ := exec.RunShellCommand("docker version --format '{{.Server.Version}}'", nil, "", false)
 	re := regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 	for _, s := range lst.ToArray() {
 		if re.MatchString(s) {
@@ -54,10 +51,8 @@ func (receiver Client) GetVersion() string {
 
 // Stats 获取所有容器的资源使用
 func (receiver Client) Stats() collections.List[DockerStatsVO] {
-	progress := make(chan string, 1000)
 	// docker stats --format "table {{.Container}}|{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}|{{.MemPerc}}" --no-stream
-	var exitCode = exec.RunShell("docker stats --format \"table {{.Container}}|{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}|{{.MemPerc}}\" --no-stream", progress, nil, "", false)
-	serviceList := collections.NewListFromChan(progress)
+	serviceList, exitCode := exec.RunShellCommand("docker stats --format \"table {{.Container}}|{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}|{{.MemPerc}}\" --no-stream", nil, "", false)
 	lstDockerInstance := collections.NewList[DockerStatsVO]()
 	if exitCode != 0 || serviceList.Count() == 0 {
 		return lstDockerInstance
@@ -122,35 +117,27 @@ func (receiver Client) Stats() collections.List[DockerStatsVO] {
 
 // 当前节点是否为主节点
 func (receiver Client) IsMaster() bool {
-	receiveOutput := make(chan string, 100)
-	exec.RunShell("docker info --format '{{.Swarm.ControlAvailable}}'", receiveOutput, nil, "", false)
-	lst := collections.NewListFromChan(receiveOutput)
+	lst, _ := exec.RunShellCommand("docker info --format '{{.Swarm.ControlAvailable}}'", nil, "", false)
 	return lst.Contains("true")
 }
 
 // 获取主机IP
 func (receiver Client) GetHostIP() string {
-	receiveOutput := make(chan string, 100)
-	exec.RunShell("docker info --format '{{.Swarm.NodeAddr}}'", receiveOutput, nil, "", false)
-	lst := collections.NewListFromChan(receiveOutput)
+	lst, _ := exec.RunShellCommand("docker info --format '{{.Swarm.NodeAddr}}'", nil, "", false)
 	return lst.First()
 }
 
 // 获取主机IP
 func (receiver Client) GetHostName() string {
-	receiveOutput := make(chan string, 100)
-	exec.RunShell("docker info --format '{{.Name}}'", receiveOutput, nil, "", false)
-	lst := collections.NewListFromChan(receiveOutput)
+	lst, _ := exec.RunShellCommand("docker info --format '{{.Name}}'", nil, "", false)
 	return lst.First()
 }
 
 // 获取主机信息
 func (receiver Client) GetInfo() DockerInfo {
-	receiveOutput := make(chan string, 100)
-	exec.RunShell("docker info --format '{\"NodeAddr\":\"{{.Swarm.NodeAddr}}\",\"HostName\":\"{{.Name}}\",\"IsMaster\":{{.Swarm.ControlAvailable}},\"Version\":\"{{.ServerVersion}}\"}'", receiveOutput, nil, "", false)
-	json := collections.NewListFromChan(receiveOutput).First()
+	lst, _ := exec.RunShellCommand("docker info --format '{\"NodeAddr\":\"{{.Swarm.NodeAddr}}\",\"HostName\":\"{{.Name}}\",\"IsMaster\":{{.Swarm.ControlAvailable}},\"Version\":\"{{.ServerVersion}}\"}'", nil, "", false)
 	var dockerInfo DockerInfo
-	snc.Unmarshal([]byte(json), &dockerInfo)
+	snc.Unmarshal([]byte(lst.First()), &dockerInfo)
 	return dockerInfo
 }
 

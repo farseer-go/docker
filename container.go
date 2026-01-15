@@ -13,39 +13,37 @@ import (
 )
 
 type container struct {
-	progress chan string
+	//progress chan string
 }
 
 // Exists 判断容器是否已创建
 func (receiver container) Exists(containerId string) bool {
-	progress := make(chan string, 5000)
 	// docker inspect fops
-	var exitCode = exec.RunShell(fmt.Sprintf("docker inspect %s", containerId), progress, nil, "", false)
-	lst := collections.NewListFromChan(progress)
+	lstMessage, exitCode := exec.RunShellCommand(fmt.Sprintf("docker inspect %s", containerId), nil, "", false)
 	if exitCode != 0 {
-		if lst.Contains("[]") && lst.ContainsPrefix("Error: No such object:") {
+		if lstMessage.Contains("[]") && lstMessage.ContainsPrefix("Error: No such object:") {
 			return false
 		}
 		return false
 	}
-	if lst.Contains("[]") && lst.ContainsPrefix("Error: No such object:") {
+	if lstMessage.Contains("[]") && lstMessage.ContainsPrefix("Error: No such object:") {
 		return false
 	}
-	return lst.ContainsAny(fmt.Sprintf("\"Name\": \"/%s\",", containerId))
+	return lstMessage.ContainsAny(fmt.Sprintf("\"Name\": \"/%s\",", containerId))
 }
 
 // Kill 停止容器并删除
-func (receiver container) Kill(containerId string) {
-	exec.RunShell(fmt.Sprintf("docker kill %s", containerId), receiver.progress, nil, "", false)
+func (receiver container) Kill(containerId string) (chan string, func() int) {
+	return exec.RunShell(fmt.Sprintf("docker kill %s", containerId), nil, "", false)
 }
 
 // RM 删除容器
-func (receiver container) RM(containerId string) {
-	exec.RunShell(fmt.Sprintf("docker rm %s", containerId), receiver.progress, nil, "", false)
+func (receiver container) RM(containerId string) (chan string, func() int) {
+	return exec.RunShell(fmt.Sprintf("docker rm %s", containerId), nil, "", false)
 }
 
 // 运行容器
-func (receiver container) Run(containerId string, networkName string, dockerImage string, args []string, useRm bool, env map[string]string, ctx context.Context) error {
+func (receiver container) Run(containerId string, networkName string, dockerImage string, args []string, useRm bool, env map[string]string, ctx context.Context) (chan string, func() int) {
 	bf := bytes.Buffer{}
 	bf.WriteString("docker run")
 	if useRm {
@@ -69,19 +67,16 @@ func (receiver container) Run(containerId string, networkName string, dockerImag
 	bf.WriteString(" ")
 	bf.WriteString(dockerImage)
 
-	exitCode := exec.RunShellContext(ctx, bf.String(), receiver.progress, env, "", true)
-	if exitCode != 0 {
-		return fmt.Errorf(collections.NewListFromChan(receiver.progress).ToString("\n"))
-	}
-	return nil
+	return exec.RunShellContext(ctx, bf.String(), env, "", true)
 }
 
 // Restart 重启容器
-func (receiver container) Restart(containerId string) {
-	exec.RunShell(fmt.Sprintf("docker restart %s", containerId), receiver.progress, nil, "", false)
+func (receiver container) Restart(containerId string) (chan string, func() int) {
+	return exec.RunShell(fmt.Sprintf("docker restart %s", containerId), nil, "", false)
 }
 
-func (receiver container) Exec(containerId string, execCmd string, env map[string]string, progress chan string, ctx context.Context) error {
+// 在容器内部执行cmd命令
+func (receiver container) Exec(containerId string, execCmd string, env map[string]string, ctx context.Context) (chan string, func() int) {
 	if env == nil {
 		env = make(map[string]string)
 	}
@@ -97,16 +92,13 @@ func (receiver container) Exec(containerId string, execCmd string, env map[strin
 	bf.WriteString("\"")
 	bf.WriteString(execCmd)
 	bf.WriteString("\"")
-	exitCode := exec.RunShellContext(ctx, bf.String(), progress, nil, "", false)
-	if exitCode != 0 {
-		return fmt.Errorf("docker exec 执行失败")
-	}
-	return nil
+	return exec.RunShellContext(ctx, bf.String(), nil, "", false)
 }
 
 // Cp 复制文件到容器内
-func (receiver container) Cp(containerId string, sourceFile, destFile string, ctx context.Context) error {
-	_ = receiver.Exec(containerId, "mkdir -p "+path.Dir(destFile), nil, receiver.progress, ctx)
+func (receiver container) Cp(containerId string, sourceFile, destFile string, ctx context.Context) (chan string, func() int) {
+	_, wait := receiver.Exec(containerId, "mkdir -p "+path.Dir(destFile), nil, ctx)
+	wait()
 
 	// docker cp /var/lib/fops/dist/Dockerfile FOPS-Build:/var/lib/fops/dist/Dockerfile
 	bf := bytes.Buffer{}
@@ -116,19 +108,13 @@ func (receiver container) Cp(containerId string, sourceFile, destFile string, ct
 	bf.WriteString(containerId)
 	bf.WriteString(":")
 	bf.WriteString(destFile)
-	exitCode := exec.RunShellContext(ctx, bf.String(), receiver.progress, nil, "", false)
-	if exitCode != 0 {
-		return fmt.Errorf(collections.NewListFromChan(receiver.progress).ToString("\n"))
-	}
-	return nil
+	return exec.RunShellContext(ctx, bf.String(), nil, "", false)
 }
 
 // Logs 获取日志
 func (receiver container) Logs(containerId string, tailCount int) collections.List[string] {
-	progress := make(chan string, 5000)
 	// docker service logs fops
-	exitCode := exec.RunShell(fmt.Sprintf("docker logs %s --tail %d", containerId, tailCount), progress, nil, "", true)
-	lst := collections.NewListFromChan(progress)
+	lst, exitCode := exec.RunShellCommand(fmt.Sprintf("docker logs %s --tail %d", containerId, tailCount), nil, "", true)
 	if exitCode != 0 {
 		lst.Insert(0, "获取日志失败。")
 	}
@@ -137,10 +123,8 @@ func (receiver container) Logs(containerId string, tailCount int) collections.Li
 
 // Inspect 查看容器详情
 func (receiver container) Inspect(containerId string) (ContainerIdInspectJson, error) {
-	progress := make(chan string, 5000)
 	// docker inspect rqcinkiry0jr
-	exec.RunShell(fmt.Sprintf("docker inspect %s", containerId), progress, nil, "", false)
-	lst := collections.NewListFromChan(progress)
+	lst, _ := exec.RunShellCommand(fmt.Sprintf("docker inspect %s", containerId), nil, "", false)
 	if lst.ContainsAny("No such object") {
 		return nil, nil
 	}
@@ -154,10 +138,8 @@ func (receiver container) Inspect(containerId string) (ContainerIdInspectJson, e
 
 // InspectByServiceId 查看服务详情
 func (receiver container) InspectByServiceId(serviceId string) (ServiceIdInspectJson, error) {
-	progress := make(chan string, 5000)
 	// docker inspect rqcinkiry0jr
-	exec.RunShell(fmt.Sprintf("docker inspect %s", serviceId), progress, nil, "", false)
-	lst := collections.NewListFromChan(progress)
+	lst, _ := exec.RunShellCommand(fmt.Sprintf("docker inspect %s", serviceId), nil, "", false)
 	if lst.ContainsAny("No such object") {
 		return nil, nil
 	}

@@ -1,29 +1,36 @@
 package docker
 
 import (
+	"sync"
+
 	"github.com/farseer-go/fs/snc"
 	"github.com/farseer-go/utils/exec"
 )
 
 type event struct {
-	progress chan string
+	//progress chan string
 }
 
 // Watch 持续获取docker事件
 func (receiver event) Watch() chan EventResult {
 	eventResultChan := make(chan EventResult, 1000)
+	progress, wait := exec.RunShell("docker events --format '{{json .}}'", nil, "", false)
+
 	// 将读取到的json事件信息转换成EventResult结构体
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(1)
 	go func() {
-		for json := range receiver.progress {
+		defer waitGroup.Done()
+		for json := range progress {
 			var eventResult EventResult
 			snc.Unmarshal([]byte(json), &eventResult)
 			eventResultChan <- eventResult
 		}
 	}()
-	go func() {
-		exec.RunShell("docker events --format '{{json .}}'", receiver.progress, nil, "", false)
-		close(eventResultChan)
-	}()
+
+	wait()
+	waitGroup.Wait()
+
 	return eventResultChan
 }
 
