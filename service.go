@@ -3,6 +3,7 @@ package docker
 import (
 	"bytes"
 	"context"
+	"errors"
 
 	"fmt"
 	"strings"
@@ -21,7 +22,6 @@ type service struct {
 func (receiver service) Delete(serviceName string) (chan string, func() int) {
 	// docker service rm fops
 	return exec.RunShell(fmt.Sprintf("docker service rm %s", serviceName), nil, "", false)
-
 }
 
 // SetImagesAndReplicas 更新镜像版本和副本数量
@@ -59,7 +59,7 @@ func (receiver service) Inspect(serviceName string) (ServiceInspectJson, error) 
 	// docker service inspect fops
 	lst, _ := exec.RunShellCommand(fmt.Sprintf("docker service inspect %s", serviceName), nil, "", false)
 	if lst.ContainsAny("no such service") {
-		return nil, nil
+		return nil, errors.New("no such service")
 	}
 
 	var serviceInspectJson ServiceInspectJson
@@ -70,15 +70,15 @@ func (receiver service) Inspect(serviceName string) (ServiceInspectJson, error) 
 }
 
 // Exists 服务是否存在
-func (receiver service) Exists(serviceName string) (bool, error) {
+func (receiver service) Exists(serviceName string) bool {
 	serviceInspectJsons, err := receiver.Inspect(serviceName)
-	if err != nil && strings.Contains(err.Error(), " not found") {
-		return false, nil
+	if err != nil && strings.Contains(err.Error(), "no such service") {
+		return false
 	}
 	if len(serviceInspectJsons) == 0 {
-		return false, err
+		return false
 	}
-	return serviceInspectJsons[0].ID != "", err
+	return serviceInspectJsons[0].ID != ""
 }
 
 // Create 创建服务
