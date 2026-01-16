@@ -73,7 +73,11 @@ func (receiver Client) Stats() collections.List[DockerStatsVO] {
 			names = append(names, make([]string, 3-len(names))...)
 		}
 		// taskId 最多取12位
-		names[2] = names[2][:min(len(names[2]), 12)]
+		n := len(names[2])
+		if n > 12 {
+			n = 12
+		}
+		names[2] = names[2][:n]
 		dockerStatsVO := DockerStatsVO{
 			ContainerID:        sers[0],
 			ContainerName:      names[0] + "." + names[1],
