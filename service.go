@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/farseer-go/collections"
+	"github.com/farseer-go/fs/flog"
 	"github.com/farseer-go/fs/parse"
 	"github.com/farseer-go/fs/snc"
 	"github.com/farseer-go/utils/exec"
@@ -109,17 +110,55 @@ func (receiver service) Create(serviceName, dockerNodeRole, additionalScripts, d
 	return exec.RunShellContext(context.Background(), sb.String(), nil, "", true)
 }
 
-// Logs 获取日志
-func (receiver service) Logs(serviceIdOrServiceName string, tailCount int) (collections.List[string], error) {
-	// docker service logs fops
-	lst, exitCode := exec.RunShellCommand(fmt.Sprintf("docker service logs %s --tail %d", serviceIdOrServiceName, tailCount), nil, "", true)
+type ServiceLogVO struct {
+	ContainerId string
+	ServiceName string
+	NodeName    string
+	Logs        collections.List[string]
+}
 
+// Logs 获取日志
+func (receiver service) Logs(serviceIdOrServiceName string, tailCount int) (collections.List[ServiceLogVO], error) {
+	// docker service logs fops
+	lstLog, exitCode := exec.RunShellCommand(fmt.Sprintf("docker service logs %s --tail %d", serviceIdOrServiceName, tailCount), nil, "", true)
+
+	lst := collections.NewList[ServiceLogVO]()
 	if exitCode != 0 {
 		return lst, fmt.Errorf("获取日志失败。")
 	}
-	lst.Foreach(func(item *string) {
-		if strings.Contains(*item, "|") {
-			*item = strings.TrimSpace(strings.SplitN(*item, "|", 2)[1])
+
+	lstLog.Foreach(func(item *string) {
+		logs := strings.SplitN(*item, "|", 2)
+		if len(logs) != 2 {
+			flog.Infof("容器日志分割|不成功：%s", *item)
+			return
+		}
+
+		// 得到容器名称和节点名称
+		name_Id_NodeName := strings.TrimSpace(logs[0])
+		// 日志内容
+		content := strings.TrimSpace(logs[1])
+		// 节点名称
+		name_Id, nodeName, _ := strings.Cut(name_Id_NodeName, "@")
+		// 服务ID和名称
+		var serverName string
+		var containerId string
+		if i := strings.LastIndex(name_Id, "."); i > 0 && i < len(name_Id)-1 {
+			serverName, containerId = name_Id[:i], name_Id[i+1:]
+		}
+
+		// 找到对应的容器，添加日志
+		if curContainer := lst.Find(func(item *ServiceLogVO) bool {
+			return item.ContainerId == containerId
+		}); curContainer != nil {
+			curContainer.Logs.Add(content)
+		} else {
+			lst.Add(ServiceLogVO{
+				ContainerId: containerId,
+				ServiceName: serverName,
+				NodeName:    nodeName,
+				Logs:        collections.NewList(content),
+			})
 		}
 	})
 	return lst, nil
