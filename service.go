@@ -176,7 +176,7 @@ func (receiver service) PS(serviceName string) collections.List[TaskInstanceVO] 
 		}
 		lstDockerInstance.Add(TaskInstanceVO{
 			TaskId:    sers[0],
-			Name:      sers[1],
+			Name:      strings.ReplaceAll(sers[1], " \\_", ""),
 			Image:     sers[2],
 			Node:      sers[3],
 			State:     sers[4],
