@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/farseer-go/collections"
-	"github.com/farseer-go/fs/flog"
 	"github.com/farseer-go/fs/parse"
 	"github.com/farseer-go/fs/snc"
 	"github.com/farseer-go/utils/exec"
@@ -130,7 +129,6 @@ func (receiver service) Logs(serviceIdOrServiceName string, tailCount int) (coll
 	lstLog.Foreach(func(item *string) {
 		logs := strings.SplitN(*item, "|", 2)
 		if len(logs) != 2 {
-			flog.Infof("容器日志分割|不成功：%s", *item)
 			return
 		}
 
