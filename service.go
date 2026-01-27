@@ -158,12 +158,12 @@ func (receiver service) List() collections.List[ServiceListVO] {
 }
 
 // PS 获取容器运行的实例信息
-func (receiver service) PS(serviceName string) collections.List[TaskInstanceVO] {
+func (receiver service) PS(serviceName string) collections.List[ServiceTaskVO] {
 	// docker service ps fops --format "table {{.ID}}|{{.Name}}|{{.Image}}|{{.Node}}|{{.DesiredState}}|{{.CurrentState}}|{{.Error}}"
 	serviceList, exitCode := exec.RunShellCommand(fmt.Sprintf("docker service ps %s --format \"table {{.ID}}|{{.Name}}|{{.Image}}|{{.Node}}|{{.DesiredState}}|{{.CurrentState}}|{{.Error}}\"", serviceName), nil, "", false)
-	lstDockerInstance := collections.NewList[TaskInstanceVO]()
+	lstTaskGroupVO := collections.NewList[ServiceTaskVO]()
 	if exitCode != 0 || serviceList.Count() == 0 {
-		return lstDockerInstance
+		return lstTaskGroupVO
 	}
 
 	// 移除标题
@@ -174,15 +174,30 @@ func (receiver service) PS(serviceName string) collections.List[TaskInstanceVO] 
 		if len(sers) < 7 {
 			return
 		}
-		lstDockerInstance.Add(TaskInstanceVO{
-			TaskId:    sers[0],
-			Name:      strings.ReplaceAll(sers[1], " \\_", ""),
-			Image:     sers[2],
-			Node:      sers[3],
-			State:     sers[4],
-			StateInfo: sers[5],
-			Error:     sers[6],
-		})
+		// 包含\_的名称，说明是子任务
+		if strings.Contains(sers[1], "\\_") {
+			taskGroupVO := lstTaskGroupVO.LastAddr()
+			taskGroupVO.Tasks.Add(TaskInstanceVO{
+				TaskId:    sers[0],
+				Image:     sers[2],
+				Node:      sers[3],
+				State:     sers[4],
+				StateInfo: sers[5],
+				Error:     sers[6],
+			})
+		} else {
+			// 主任务
+			lstTaskGroupVO.Add(ServiceTaskVO{
+				ServiceTaskId: sers[0],
+				Name:          sers[1],
+				Image:         sers[2],
+				Node:          sers[3],
+				State:         sers[4],
+				StateInfo:     sers[5],
+				Error:         sers[6],
+				Tasks:         collections.NewList[TaskInstanceVO](),
+			})
+		}
 	})
-	return lstDockerInstance
+	return lstTaskGroupVO
 }

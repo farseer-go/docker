@@ -16,9 +16,19 @@ type ServiceListVO struct {
 }
 
 // TaskInstanceVO 容器的实例信息 docker service ps fops
+type ServiceTaskVO struct {
+	ServiceTaskId string                           // 任务ID
+	Name          string                           // 容器名称
+	Image         string                           // 镜像
+	Node          string                           // 节点
+	State         string                           // 状态   Shutdown Running
+	StateInfo     string                           // 状态
+	Error         string                           // 错误信息
+	Tasks         collections.List[TaskInstanceVO] // 子任务列表
+}
+
 type TaskInstanceVO struct {
 	TaskId    string // 任务ID
-	Name      string // 容器名称
 	Image     string // 镜像
 	Node      string // 节点
 	State     string // 状态   Shutdown Running
