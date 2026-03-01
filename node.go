@@ -2,6 +2,7 @@ package docker
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/farseer-go/collections"
@@ -9,7 +10,7 @@ import (
 )
 
 type node struct {
-	//progress chan string
+	unixClient *http.Client
 }
 
 // List 获取主机节点列表

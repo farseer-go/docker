@@ -1,6 +1,9 @@
 package docker
 
 import (
+	"encoding/json"
+	"net"
+	"net/http"
 	"regexp"
 	"strings"
 
@@ -13,17 +16,35 @@ import (
 // Client docker client
 type Client struct {
 	//dockerClient *client.Client
-	Container container
-	Service   service
-	Node      node
-	Hub       hub
-	Images    images
-	Event     event
+	Container  container
+	Service    service
+	Node       node
+	Hub        hub
+	Images     images
+	Event      event
+	unixClient *http.Client
 }
 
 // NewClient 实例化一个Client
 func NewClient() *Client {
-	client := &Client{}
+	unixClient := &http.Client{
+		Transport: &http.Transport{
+			// 自定义 Dial 函数，将 HTTP 请求通过 Unix Socket 发送
+			Dial: func(network, addr string) (net.Conn, error) {
+				return net.Dial("unix", "/var/run/docker.sock")
+			},
+		},
+	}
+
+	client := &Client{
+		unixClient: unixClient,
+		Container:  container{unixClient: unixClient},
+		Service:    service{unixClient: unixClient},
+		Node:       node{unixClient: unixClient},
+		Hub:        hub{unixClient: unixClient},
+		Images:     images{unixClient: unixClient},
+		Event:      event{unixClient: unixClient},
+	}
 	return client
 }
 
@@ -39,13 +60,27 @@ func NewClient() *Client {
 
 // GetVersion 获取系统Docker版本
 func (receiver Client) GetVersion() string {
-	lst, _ := exec.RunShellCommand("docker version --format '{{.Server.Version}}'", nil, "", false)
-	re := regexp.MustCompile(`^\d+\.\d+\.\d+$`)
-	for _, s := range lst.ToArray() {
-		if re.MatchString(s) {
-			return s
-		}
+	resp, err := receiver.unixClient.Get("http://localhost/version")
+	if err != nil {
+		return ""
 	}
+	defer resp.Body.Close()
+
+	type VersionResponse struct {
+		Version    string `json:"Version"`    // Docker 版本
+		ApiVersion string `json:"ApiVersion"` // API 版本
+	}
+	var version VersionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&version); err != nil {
+		return ""
+	}
+
+	// 验证版本号格式
+	re := regexp.MustCompile(`^\d+\.\d+\.\d+$`)
+	if re.MatchString(version.Version) {
+		return version.Version
+	}
+
 	return ""
 }
 

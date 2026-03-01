@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/http"
 
 	"fmt"
 	"strings"
@@ -15,7 +16,7 @@ import (
 )
 
 type service struct {
-	//progress chan string
+	unixClient *http.Client
 }
 
 // Delete 删除容器服务

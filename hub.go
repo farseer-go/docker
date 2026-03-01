@@ -1,13 +1,14 @@
 package docker
 
 import (
+	"net/http"
 	"strings"
 
 	"github.com/farseer-go/utils/exec"
 )
 
 type hub struct {
-	//progress chan string
+	unixClient *http.Client
 }
 
 // Login 登陆仓库

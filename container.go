@@ -3,6 +3,7 @@ package docker
 import (
 	"bytes"
 	"context"
+	"net/http"
 
 	"fmt"
 	"path"
@@ -13,7 +14,7 @@ import (
 )
 
 type container struct {
-	//progress chan string
+	unixClient *http.Client
 }
 
 // Exists 判断容器是否已创建

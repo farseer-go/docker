@@ -2,12 +2,13 @@ package docker
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/farseer-go/utils/exec"
 )
 
 type images struct {
-	//progress chan string
+	unixClient *http.Client
 }
 
 // Pull 拉取镜像

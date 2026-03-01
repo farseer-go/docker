@@ -1,13 +1,15 @@
 package docker
 
 import (
+	"net/http"
+
 	"github.com/farseer-go/fs/async"
 	"github.com/farseer-go/fs/snc"
 	"github.com/farseer-go/utils/exec"
 )
 
 type event struct {
-	//progress chan string
+	unixClient *http.Client
 }
 
 // Watch 持续获取docker事件
@@ -24,6 +26,7 @@ func (receiver event) Watch() chan EventResult {
 			eventResultChan <- eventResult
 		}
 	})
+
 	defer worker.Wait()
 
 	wait()
