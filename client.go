@@ -1,10 +1,8 @@
 package docker
 
 import (
-	"encoding/json"
 	"net"
 	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/farseer-go/collections"
@@ -48,44 +46,30 @@ func NewClient() *Client {
 	return client
 }
 
-// 设置接收消息的通道
-// func (receiver *Client) SetChar(c chan string) {
-// 	receiver.Container.progress = c
-// 	receiver.Service.progress = c
-// 	receiver.Node.progress = c
-// 	receiver.Hub.progress = c
-// 	receiver.Images.progress = c
-// 	receiver.Event.progress = c
-// }
-
 // GetVersion 获取系统Docker版本
 func (receiver Client) GetVersion() string {
-	resp, err := receiver.unixClient.Get("http://localhost/version")
-	if err != nil {
-		return ""
-	}
-	defer resp.Body.Close()
-
+	// curl --unix-socket /var/run/docker.sock http://localhost/version
 	type VersionResponse struct {
 		Version    string `json:"Version"`    // Docker 版本
 		ApiVersion string `json:"ApiVersion"` // API 版本
 	}
-	var version VersionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&version); err != nil {
-		return ""
-	}
+	version, _ := UnixGet[VersionResponse](receiver.unixClient, "http://localhost/version")
+	return version.Version
+}
 
-	// 验证版本号格式
-	re := regexp.MustCompile(`^\d+\.\d+\.\d+$`)
-	if re.MatchString(version.Version) {
-		return version.Version
-	}
-
-	return ""
+func (receiver Client) Stats() collections.List[DockerStatsVO] {
+	lstDockerInstance := collections.NewList[DockerStatsVO]()
+	// 获取所有容器列表
+	containers, _ := receiver.Container.List("", nil)
+	containers.Foreach(func(item *Container) {
+		dockerStatsVO := receiver.Container.Stats(item.ID)
+		lstDockerInstance.Add(dockerStatsVO)
+	})
+	return lstDockerInstance
 }
 
 // Stats 获取所有容器的资源使用
-func (receiver Client) Stats() collections.List[DockerStatsVO] {
+func (receiver Client) Stats2() collections.List[DockerStatsVO] {
 	// docker stats --format "table {{.Container}}|{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}|{{.MemPerc}}" --no-stream
 	serviceList, exitCode := exec.RunShellCommand("docker stats --format \"table {{.Container}}|{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}|{{.MemPerc}}\" --no-stream", nil, "", false)
 	lstDockerInstance := collections.NewList[DockerStatsVO]()

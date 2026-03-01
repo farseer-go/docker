@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"net/http"
+	"strings"
 
 	"fmt"
 	"path"
@@ -153,4 +154,152 @@ func (receiver container) InspectByServiceId(serviceId string) (ServiceIdInspect
 		serviceIdInspectJson[0].Status.ContainerStatus.ContainerID = serviceIdInspectJson[0].Status.ContainerStatus.ContainerID[:12]
 	}
 	return serviceIdInspectJson, err
+}
+
+// Container 容器信息
+type Container struct {
+	ID      string        `json:"Id"`
+	Names   []string      `json:"Names"`
+	Image   string        `json:"Image"`
+	ImageID string        `json:"ImageID"`
+	Command string        `json:"Command"`
+	Created int           `json:"Created"`
+	Ports   []interface{} `json:"Ports"`
+	Labels  struct {
+		ComDockerSwarmNodeID      string `json:"com.docker.swarm.node.id"`
+		ComDockerSwarmServiceID   string `json:"com.docker.swarm.service.id"`
+		ComDockerSwarmServiceName string `json:"com.docker.swarm.service.name"`
+		ComDockerSwarmTask        string `json:"com.docker.swarm.task"`
+		ComDockerSwarmTaskID      string `json:"com.docker.swarm.task.id"`
+		ComDockerSwarmTaskName    string `json:"com.docker.swarm.task.name"`
+	} `json:"Labels"`
+	State      string `json:"State"`
+	Status     string `json:"Status"`
+	HostConfig struct {
+		NetworkMode string `json:"NetworkMode"`
+	} `json:"HostConfig"`
+	NetworkSettings struct {
+		Networks struct {
+			Net struct {
+				IPAMConfig struct {
+					IPv4Address string `json:"IPv4Address"`
+				} `json:"IPAMConfig"`
+				Links               interface{} `json:"Links"`
+				Aliases             interface{} `json:"Aliases"`
+				MacAddress          string      `json:"MacAddress"`
+				NetworkID           string      `json:"NetworkID"`
+				EndpointID          string      `json:"EndpointID"`
+				Gateway             string      `json:"Gateway"`
+				IPAddress           string      `json:"IPAddress"`
+				IPPrefixLen         int         `json:"IPPrefixLen"`
+				IPv6Gateway         string      `json:"IPv6Gateway"`
+				GlobalIPv6Address   string      `json:"GlobalIPv6Address"`
+				GlobalIPv6PrefixLen int         `json:"GlobalIPv6PrefixLen"`
+				DriverOpts          interface{} `json:"DriverOpts"`
+				DNSNames            interface{} `json:"DNSNames"`
+			} `json:"net"`
+		} `json:"Networks"`
+	} `json:"NetworkSettings"`
+	Mounts []struct {
+		Type        string `json:"Type"`
+		Source      string `json:"Source"`
+		Destination string `json:"Destination"`
+		Mode        string `json:"Mode"`
+		RW          bool   `json:"RW"`
+		Propagation string `json:"Propagation"`
+		Name        string `json:"Name,omitempty"`
+		Driver      string `json:"Driver,omitempty"`
+	} `json:"Mounts"`
+}
+
+// List 获取容器列表
+func (receiver container) List(status string, labels map[string]string) (collections.List[Container], error) {
+	// curl --unix-socket /var/run/docker.sock http://localhost/containers/json?status=
+	url := "http://localhost/containers/json?status=" + status
+	for k, v := range labels {
+		url += "&label=" + k + "=" + v
+	}
+
+	containers, err := UnixGet[collections.List[Container]](receiver.unixClient, url)
+	return containers, err
+}
+
+// 解析响应
+type StatsResponse struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	CPUStats struct {
+		CPUUsage struct {
+			TotalUsage uint64 `json:"total_usage"` // 当前累计 CPU 使用时间（纳秒）
+		} `json:"cpu_usage"`
+		SystemUsage uint64 `json:"system_cpu_usage"` // 当前系统累计 CPU 时间（纳秒）
+		OnlineCPUs  uint64 `json:"online_cpus"`      // CPU 核心数
+	} `json:"cpu_stats"`
+	PreCPUStats struct {
+		CPUUsage struct {
+			TotalUsage uint64 `json:"total_usage"` // 上一次累计 CPU 使用时间（纳秒）
+		} `json:"cpu_usage"`
+		SystemUsage uint64 `json:"system_cpu_usage"` // 上一次系统累计 CPU 时间（纳秒）
+	} `json:"precpu_stats"`
+	MemoryStats struct {
+		Usage uint64 `json:"usage"`
+		Limit uint64 `json:"limit"`
+		Stats struct {
+			Cache uint64 `json:"cache"`
+		} `json:"stats"`
+	} `json:"memory_stats"`
+}
+
+// getContainerStats 获取单个容器的统计信息
+// names 参数是容器的名称列表，通常来自 List 方法的结果。Docker Swarm 模式下，容器名称格式为 /服务名.序号.任务ID
+func (receiver container) Stats(containerID string) DockerStatsVO {
+	dockerStatsVO := DockerStatsVO{
+		ContainerID: containerID[:12],
+	}
+
+	// curl --unix-socket /var/run/docker.sock http://localhost/containers/9e76ea4b0231/stats?stream=false
+	url := fmt.Sprintf("http://localhost/containers/%s/stats?stream=false", containerID)
+
+	stats, err := UnixGet[StatsResponse](receiver.unixClient, url)
+	if err != nil {
+		return dockerStatsVO
+	}
+
+	// 解析容器名称（Swarm 格式: /服务名.序号.任务ID）
+	// stats.Name = "/fops.1.l7c3377cnjacuy9xtz88resrw"
+	// 移除前导斜杠
+	containerName := strings.TrimPrefix(stats.Name, "/")
+	parts := strings.Split(containerName, ".")
+	// 补齐到 3 个部分
+	for len(parts) < 3 {
+		parts = append(parts, "")
+	}
+
+	dockerStatsVO.ContainerName = parts[0] + "." + parts[1]
+	dockerStatsVO.Name = parts[0]
+	dockerStatsVO.TaskId = parts[2]
+
+	// taskId 最多取 12 位
+	if len(dockerStatsVO.TaskId) > 12 {
+		dockerStatsVO.TaskId = dockerStatsVO.TaskId[:12]
+	}
+
+	// 计算 CPU 使用率
+	// 容器在这两次采样之间实际使用了多少 CPU 时间。
+	cpuDelta := float64(stats.CPUStats.CPUUsage.TotalUsage - stats.PreCPUStats.CPUUsage.TotalUsage)
+	// 系统所有 CPU 核心在这两次采样之间的总可用时间。
+	systemDelta := float64(stats.CPUStats.SystemUsage - stats.PreCPUStats.SystemUsage)
+	// 容器在 4 核 CPU 上使用了 200%（相当于占用了 2 个核心）
+	if systemDelta > 0 {
+		dockerStatsVO.CpuUsagePercent = (cpuDelta / systemDelta) * float64(stats.CPUStats.OnlineCPUs) * 100.0
+	}
+
+	// 计算内存使用率（MB）
+	dockerStatsVO.MemoryUsage = stats.MemoryStats.Usage / 1024 / 1024
+	dockerStatsVO.MemoryLimit = stats.MemoryStats.Limit / 1024 / 1024
+	if stats.MemoryStats.Limit > 0 {
+		dockerStatsVO.MemoryUsagePercent = float64(stats.MemoryStats.Usage) / float64(stats.MemoryStats.Limit) * 100
+	}
+
+	return dockerStatsVO
 }
