@@ -3,6 +3,8 @@ package docker
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
+	"io"
 	"net/http"
 	"strings"
 
@@ -115,12 +117,58 @@ func (receiver container) Cp(containerId string, sourceFile, destFile string, ct
 
 // Logs 获取日志
 func (receiver container) Logs(containerId string, tailCount int) collections.List[string] {
-	// docker service logs fops
-	lst, exitCode := exec.RunShellCommand(fmt.Sprintf("docker logs %s --tail %d", containerId, tailCount), nil, "", true)
-	if exitCode != 0 {
-		lst.Insert(0, "获取日志失败。")
+	// curl --unix-socket /var/run/docker.sock http://localhost/containers/9e76ea4b0231/logs?stdout=true&stderr=true&tail=100
+	// 1. 构造 URL
+	// tail=N : 告诉 Docker 守护进程只返回最后 N 行
+	// stdout=true&stderr=true : 包含标准输出和错误
+	url := fmt.Sprintf("http://localhost/containers/%s/logs?stdout=true&stderr=true&tail=%d", containerId, tailCount)
+
+	// 2. 发送请求
+	resp, err := receiver.unixClient.Get(url)
+	if err != nil {
+		return collections.List[string]{}
 	}
-	return lst
+	defer resp.Body.Close()
+
+	// 3. 解析日志流
+	// Docker 日志流格式：[8字节头] + [有效载荷] 循环
+	var result collections.List[string]
+	header := make([]byte, 8) // 8字节头缓冲区
+
+	for {
+		// 读取帧头
+		_, err := io.ReadFull(resp.Body, header)
+		if err == io.EOF || err != nil {
+			break
+		}
+
+		// 解析帧头中的载荷长度 (后4字节，大端序)
+		payloadLen := int(binary.BigEndian.Uint32(header[4:8]))
+		if payloadLen == 0 {
+			continue
+		}
+
+		// 读取载荷内容
+		payload := make([]byte, payloadLen)
+		_, err = io.ReadFull(resp.Body, payload)
+		if err != nil {
+			break
+		}
+
+		// 4. 处理内容
+		// 注意：一个载荷可能包含多行日志（比如应用一次打印了换行符）
+		// 我们需要按换行符拆分，保证 List 中每一项是一行
+		lines := strings.Split(string(payload), "\n")
+		for _, line := range lines {
+			// 去除末尾可能存在的回车符，并忽略空行
+			line = strings.TrimRight(line, "\r")
+			if line != "" {
+				result.Add(line)
+			}
+		}
+	}
+
+	return result
 }
 
 // Inspect 查看容器详情
