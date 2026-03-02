@@ -3,103 +3,127 @@ package docker
 import (
 	"fmt"
 	"net/http"
-	"strings"
+	"net/url"
+	"time"
 
 	"github.com/farseer-go/collections"
-	"github.com/farseer-go/utils/exec"
 )
 
 type node struct {
 	unixClient *http.Client
 }
 
+// DockerNodeVO 集群节点信息 docker node ls
+type DockerNodeVO struct {
+	Description struct {
+		Hostname string `json:"Hostname"` // 节点名称
+		Platform struct {
+			Architecture string `json:"Architecture"`
+			OS           string `json:"OS"`
+		} `json:"Platform"`
+		Resources struct {
+			NanoCPUs           int64    `json:"NanoCPUs"`
+			MemoryBytes        int64    `json:"MemoryBytes"` // 内存总容量（Bytes）
+			Memory             string   // 内存总容量（GB）
+			MemoryUsagePercent float64  // 内存使用百分比
+			MemoryUsage        float64  // 内存已使用（MB）
+			CpuUsagePercent    float64  // CPU使用百分比(本地计算)
+			DiskTotal          string   // 硬盘总容量（GB）
+			Disk               []DiskVO // 硬盘容量
+		} `json:"Resources"`
+	} `json:"Description"`
+	Status struct {
+		State string `json:"State"` // 主机状态   ready
+		Addr  string `json:"Addr"`  // 主机IP
+	} `json:"Status"`
+	Spec struct {
+		Labels       map[string]string `json:"Labels"`       // 标签
+		Role         string            `json:"Role"`         // 节点角色   manager worker
+		Availability string            `json:"Availability"` // 节点状态   active pause drain
+	} `json:"Spec"`
+	ManagerStatus struct {
+		Leader       bool   `json:"Leader"`       // 是否是管理节点
+		Reachability string `json:"Reachability"` // 管理节点状态   reachable unreachable
+		Addr         string `json:"Addr"`         // 管理节点IP	 192.168.1.2:2377
+	} `json:"ManagerStatus"`
+	Engine struct {
+		EngineVersion string `json:"EngineVersion"` // 引擎版本
+	} `json:"Engine"`
+	CreatedAt time.Time `json:"CreatedAt"` // 创建时间
+	UpdatedAt time.Time `json:"UpdatedAt"` // 更新时间
+
+	IsHealth bool                            // 应用是否健康
+	Label    collections.List[DockerLabelVO] // 标签
+}
+
+// DockerLabelVO 标签
+type DockerLabelVO struct {
+	Name  string // 标签名称
+	Value string // 标签值
+}
+
 // List 获取主机节点列表
 func (receiver node) List() collections.List[DockerNodeVO] {
-	// docker node ls --format "table {{.Hostname}}|{{.Status}}|{{.Availability}}|{{.ManagerStatus}}|{{.EngineVersion}}"
-	serviceList, exitCode := exec.RunShellCommand("docker node ls --format \"table {{.Hostname}}|{{.Status}}|{{.Availability}}|{{.ManagerStatus}}|{{.EngineVersion}}\"", nil, "", false)
-	lstDockerInstance := collections.NewList[DockerNodeVO]()
-	if exitCode != 0 || serviceList.Count() == 0 {
-		return lstDockerInstance
+	// curl --unix-socket /var/run/docker.sock http://localhost/nodes
+	nodesUrl := "http://localhost/nodes"
+	nodes, err := UnixGet[collections.List[DockerNodeVO]](receiver.unixClient, nodesUrl)
+	if err != nil {
+		return nodes
 	}
 
-	// 移除标题
-	serviceList.RemoveAt(0)
-	serviceList.Foreach(func(service *string) {
-		// test|Ready|Active|Leader|20.10.17
-		sers := strings.Split(*service, "|")
-		if len(sers) < 5 {
-			return
+	// 更新健康状态
+	nodes.Foreach(func(item *DockerNodeVO) {
+		item.IsHealth = item.Status.State == "Ready" && item.Spec.Availability == "Active"
+		item.Description.Resources.NanoCPUs = item.Description.Resources.NanoCPUs / 1000000000
+		item.Description.Resources.Memory = fmt.Sprintf("%.2fGB", float64(item.Description.Resources.MemoryBytes)/1024/1024/1024)
+
+		// 将标签转换为列表
+		item.Label = collections.NewList[DockerLabelVO]()
+		for k, v := range item.Spec.Labels {
+			item.Label.Add(DockerLabelVO{
+				Name:  k,
+				Value: v,
+			})
 		}
-		lstDockerInstance.Add(DockerNodeVO{
-			NodeName:      sers[0],
-			Status:        sers[1],
-			Availability:  sers[2],
-			IsMaster:      sers[3] == "Leader",
-			EngineVersion: sers[4],
-			IsHealth:      sers[1] == "Ready" && sers[2] == "Active",
-		})
 	})
-	return lstDockerInstance
+
+	return nodes
 }
 
 // Info 获取节点详情
 func (receiver node) Info(nodeName string) DockerNodeVO {
-	// docker node inspect node_1 --pretty
-	serviceList, exitCode := exec.RunShellCommand(fmt.Sprintf("docker node inspect %s --pretty", nodeName), nil, "", false)
 	vo := DockerNodeVO{
 		Label: collections.NewList[DockerLabelVO](),
 	}
-	if exitCode != 0 || serviceList.Count() == 0 {
+
+	filter := fmt.Sprintf(`{"name":{"%s":true}}`, nodeName)
+	apiUrl := "http://localhost/nodes?filters=" + url.QueryEscape(filter)
+	nodes, err := UnixGet[collections.List[DockerNodeVO]](receiver.unixClient, apiUrl)
+	if err != nil || nodes.Count() == 0 {
 		return vo
 	}
-	serviceList.For(func(index int, item *string) {
-		kv := strings.Split(*item, ":")
-		if len(kv) != 2 {
-			return
-		}
-		name := strings.TrimSpace(kv[0])
-		val := strings.TrimSpace(kv[1])
 
-		switch name {
-		case "Address":
-			// 跳过Manager Status
-			if strings.Contains(val, ":") {
-				return
-			}
-			vo.IP = val
-		case "Operating System":
-			vo.OS = val
-		case "Architecture":
-			vo.Architecture = val
-		case "CPUs":
-			vo.CPUs = val
-		case "Memory":
-			vo.Memory = val
-		case "Labels":
-			// 标签要特殊处理
-			/*
-			   Labels:
-			    - run=job
-			    - type=master
-			*/
-			tag := " - "
-			for {
-				index++
-				content := serviceList.Index(index)
-				if !strings.HasPrefix(content, tag) {
-					return
-				}
-				// 移除标签
-				content = strings.TrimSpace(content[len(tag):])
-				kvs := strings.Split(content, "=")
-				if len(kvs) > 1 {
-					vo.Label.Add(DockerLabelVO{
-						Name:  kvs[0],
-						Value: kvs[1],
-					})
-				}
-			}
-		}
-	})
+	// 取第一个匹配的节点
+	nodeData := nodes.First()
+
+	// 处理 CPU (API 返回 NanoCPUs，需要除以 1e9)
+	if nodeData.Description.Resources.NanoCPUs > 0 {
+		nodeData.Description.Resources.NanoCPUs = nodeData.Description.Resources.NanoCPUs / 1000000000
+	}
+
+	// 处理 Memory (API 返回 Bytes，这里转为 GB，保留2位小数)
+	if nodeData.Description.Resources.MemoryBytes > 0 {
+		vo.Description.Resources.Memory = fmt.Sprintf("%.2fGB", float64(nodeData.Description.Resources.MemoryBytes)/1024/1024/1024)
+	}
+
+	// 处理 Labels
+	// API 返回的是 map[string]string，转换为 List[DockerLabelVO]
+	for k, v := range nodeData.Spec.Labels {
+		vo.Label.Add(DockerLabelVO{
+			Name:  k,
+			Value: v,
+		})
+	}
+
 	return vo
 }

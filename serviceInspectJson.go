@@ -36,39 +36,11 @@ type TaskInstanceVO struct {
 	Error     string // 错误信息
 }
 
-// DockerNodeVO 集群节点信息 docker node ls
-type DockerNodeVO struct {
-	NodeName           string                          // 节点名称
-	Status             string                          // 主机状态   Ready
-	Availability       string                          // 节点状态
-	IsMaster           bool                            // 是否为主节点
-	IsHealth           bool                            // 应用是否健康
-	EngineVersion      string                          // 引擎版本
-	IP                 string                          // 节点IP（主机IP）
-	OS                 string                          // 操作系统
-	Architecture       string                          // 架构
-	CPUs               string                          // CPU核心数
-	Memory             string                          // 内存
-	Label              collections.List[DockerLabelVO] // 标签
-	CpuUsagePercent    float64                         // CPU使用百分比
-	MemoryUsagePercent float64                         // 内存使用百分比
-	MemoryUsage        float64                         // 内存已使用（MB）
-	DiskTotal          string                          // 硬盘总容量（GB）
-	Disk               []DiskVO                        // 硬盘容量
-	UpdateAt           time.Time                       // 更新时间
-}
-
 type DiskVO struct {
 	Path             string  // 硬盘路径
 	Disk             string  // 硬盘总容量（GB）
 	DiskUsagePercent float64 // 硬盘使用百分比
 	DiskUsage        float64 // 硬盘已用空间（GB）
-}
-
-// DockerLabelVO 标签
-type DockerLabelVO struct {
-	Name  string // 标签名称
-	Value string // 标签值
 }
 
 // DockerStatsVO 容器的状态
