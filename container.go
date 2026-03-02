@@ -295,10 +295,10 @@ func (receiver container) Stats(containerID string) DockerStatsVO {
 	}
 
 	// 计算内存使用率（MB）
-	dockerStatsVO.MemoryUsage = stats.MemoryStats.Usage / 1024 / 1024
+	dockerStatsVO.MemoryUsage = (stats.MemoryStats.Usage - stats.MemoryStats.Stats.Cache) / 1024 / 1024
 	dockerStatsVO.MemoryLimit = stats.MemoryStats.Limit / 1024 / 1024
 	if stats.MemoryStats.Limit > 0 {
-		dockerStatsVO.MemoryUsagePercent = float64(stats.MemoryStats.Usage) / float64(stats.MemoryStats.Limit) * 100
+		dockerStatsVO.MemoryUsagePercent = float64(stats.MemoryStats.Usage-stats.MemoryStats.Stats.Cache) / float64(stats.MemoryStats.Limit) * 100
 	}
 
 	return dockerStatsVO
