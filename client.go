@@ -3,12 +3,9 @@ package docker
 import (
 	"net"
 	"net/http"
-	"strings"
+	"time"
 
 	"github.com/farseer-go/collections"
-	"github.com/farseer-go/fs/parse"
-	"github.com/farseer-go/fs/snc"
-	"github.com/farseer-go/utils/exec"
 )
 
 // Client docker client
@@ -57,6 +54,7 @@ func (receiver Client) GetVersion() string {
 	return version.Version
 }
 
+// Stats 获取所有容器的资源使用
 func (receiver Client) Stats() collections.List[DockerStatsVO] {
 	lstDockerInstance := collections.NewList[DockerStatsVO]()
 	// 获取所有容器列表
@@ -68,105 +66,41 @@ func (receiver Client) Stats() collections.List[DockerStatsVO] {
 	return lstDockerInstance
 }
 
-// Stats 获取所有容器的资源使用
-func (receiver Client) Stats2() collections.List[DockerStatsVO] {
-	// docker stats --format "table {{.Container}}|{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}|{{.MemPerc}}" --no-stream
-	serviceList, exitCode := exec.RunShellCommand("docker stats --format \"table {{.Container}}|{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}|{{.MemPerc}}\" --no-stream", nil, "", false)
-	lstDockerInstance := collections.NewList[DockerStatsVO]()
-	if exitCode != 0 || serviceList.Count() == 0 {
-		return lstDockerInstance
-	}
-
-	// 移除标题
-	serviceList.RemoveAt(0)
-	serviceList.Foreach(func(service *string) {
-		// ba487c8d0cf1|fops.1.l7c3377cnjacuy9xtz88resrw|38.71%|268.3MiB / 3GiB|8.73%
-		sers := strings.Split(*service, "|")
-		if len(sers) != 5 {
-			return
-		}
-		// fops.1.l7c3377cnjacuy9xtz88resrw
-		names := strings.Split(sers[1], ".")
-		// 补齐到3
-		if len(names) < 3 {
-			names = append(names, make([]string, 3-len(names))...)
-		}
-		// taskId 最多取12位
-		n := len(names[2])
-		if n > 12 {
-			n = 12
-		}
-		names[2] = names[2][:n]
-		dockerStatsVO := DockerStatsVO{
-			ContainerID:        sers[0],
-			ContainerName:      names[0] + "." + names[1],
-			Name:               names[0],
-			TaskId:             names[2],
-			CpuUsagePercent:    parse.ToFloat64(strings.ReplaceAll(sers[2], "%", "")),
-			MemoryUsagePercent: parse.ToFloat64(strings.ReplaceAll(sers[4], "%", "")),
-		}
-
-		// 33.36MiB / 7.586GiB
-		memorys := strings.Split(sers[3], " / ")
-		if len(memorys) == 2 {
-			// 内存已使用（MB）memorys[0]
-			if strings.Contains(memorys[0], "MiB") {
-				memorys[0] = strings.ReplaceAll(memorys[0], "MiB", "")
-				dockerStatsVO.MemoryUsage = parse.ToUInt64(parse.ToFloat64(memorys[0]))
-			} else if strings.Contains(memorys[0], "GiB") {
-				memorys[0] = strings.ReplaceAll(memorys[0], "GiB", "")
-				dockerStatsVO.MemoryUsage = parse.ToUInt64(parse.ToFloat64(memorys[0])) * 1024
-			} else if strings.Contains(memorys[0], "KiB") {
-				memorys[0] = strings.ReplaceAll(memorys[0], "KiB", "")
-				dockerStatsVO.MemoryUsage = parse.ToUInt64(parse.ToFloat64(memorys[0])) / 1024
-			}
-
-			// 内存限制（MB）memorys[1]
-			if strings.Contains(memorys[1], "MiB") {
-				memorys[1] = strings.ReplaceAll(memorys[1], "MiB", "")
-				dockerStatsVO.MemoryLimit = parse.ToUInt64(parse.ToFloat64(memorys[1]))
-			} else if strings.Contains(memorys[1], "GiB") {
-				memorys[1] = strings.ReplaceAll(memorys[1], "GiB", "")
-				dockerStatsVO.MemoryLimit = parse.ToUInt64(parse.ToFloat64(memorys[1]) * 1024)
-			} else if strings.Contains(memorys[1], "KiB") {
-				memorys[1] = strings.ReplaceAll(memorys[1], "KiB", "")
-				dockerStatsVO.MemoryLimit = parse.ToUInt64(parse.ToFloat64(memorys[1]) / 1024)
-			}
-		}
-		lstDockerInstance.Add(dockerStatsVO)
-	})
-	return lstDockerInstance
-}
-
-// 当前节点是否为主节点
-func (receiver Client) IsMaster() bool {
-	lst, _ := exec.RunShellCommand("docker info --format '{{.Swarm.ControlAvailable}}'", nil, "", false)
-	return lst.Contains("true")
-}
-
-// 获取主机IP
-func (receiver Client) GetHostIP() string {
-	lst, _ := exec.RunShellCommand("docker info --format '{{.Swarm.NodeAddr}}'", nil, "", false)
-	return lst.First()
-}
-
-// 获取主机IP
-func (receiver Client) GetHostName() string {
-	lst, _ := exec.RunShellCommand("docker info --format '{{.Name}}'", nil, "", false)
-	return lst.First()
-}
-
-// 获取主机信息
-func (receiver Client) GetInfo() DockerInfo {
-	lst, _ := exec.RunShellCommand("docker info --format '{\"NodeAddr\":\"{{.Swarm.NodeAddr}}\",\"HostName\":\"{{.Name}}\",\"IsMaster\":{{.Swarm.ControlAvailable}},\"Version\":\"{{.ServerVersion}}\"}'", nil, "", false)
-	var dockerInfo DockerInfo
-	snc.Unmarshal([]byte(lst.First()), &dockerInfo)
-	return dockerInfo
-}
-
 type DockerInfo struct {
-	NodeAddr string `json:"NodeAddr"`
-	HostName string `json:"HostName"`
-	IsMaster bool   `json:"IsMaster"`
-	Version  string `json:"Version"`
+	Name              string    `json:"Name"`              // 主机名称
+	Containers        int       `json:"Containers"`        // 当前运行的容器数量
+	ContainersRunning int       `json:"ContainersRunning"` // 当前正在运行的容器数量
+	ContainersPaused  int       `json:"ContainersPaused"`  // 当前暂停的容器数量
+	ContainersStopped int       `json:"ContainersStopped"` // 当前停止的容器数量
+	Images            int       `json:"Images"`            // 当前系统中镜像的数量
+	Driver            string    `json:"Driver"`            // 存储驱动 overlay2
+	SystemTime        time.Time `json:"SystemTime"`        // 系统时间
+	LoggingDriver     string    `json:"LoggingDriver"`     // 日志驱动 json-file
+	CgroupDriver      string    `json:"CgroupDriver"`      // cgroup驱动 cgroupfs
+	CgroupVersion     string    `json:"CgroupVersion"`     // cgroup版本 2
+	NEventsListener   int       `json:"NEventsListener"`   // 当前监听docker事件的数量
+	KernelVersion     string    `json:"KernelVersion"`     // 内核版本 5.15.0-76-generic
+	OperatingSystem   string    `json:"OperatingSystem"`   // 操作系统 Ubuntu 22.04.3 LTS
+	OSVersion         string    `json:"OSVersion"`         // 操作系统版本 2024.04
+	OSType            string    `json:"OSType"`            // 操作系统类型 linux
+	Architecture      string    `json:"Architecture"`      // 系统架构 x86_64
+	NCPU              int       `json:"NCPU"`              // CPU数量 8
+	MemTotal          int64     `json:"MemTotal"`          // 内存总量，单位字节
+	ServerVersion     string    `json:"ServerVersion"`     // Docker版本
+	Swarm             struct {
+		NodeAddr         string     `json:"NodeAddr"`
+		ControlAvailable bool       `json:"ControlAvailable"` // 对应 IsMaster
+		RemoteManagers   []struct { // 集群中远程管理节点的信息
+			NodeID string `json:"NodeID"` // 远程管理节点的ID
+			Addr   string `json:"Addr"`   // 远程管理节点的地址
+		} `json:"RemoteManagers"`
+		Nodes    int `json:"Nodes"`    // 集群中节点总数
+		Managers int `json:"Managers"` // 集群中管理节点数量
+	} `json:"Swarm"`
+}
+
+func (receiver Client) GetInfo() DockerInfo {
+	// curl --unix-socket /var/run/docker.sock http://localhost/info
+	apiData, _ := UnixGet[DockerInfo](receiver.unixClient, "http://localhost/info")
+	return apiData
 }
