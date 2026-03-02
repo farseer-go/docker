@@ -245,7 +245,9 @@ type StatsResponse struct {
 		Usage uint64 `json:"usage"`
 		Limit uint64 `json:"limit"`
 		Stats struct {
-			Cache uint64 `json:"cache"`
+			Cache        uint64 `json:"cache"`
+			RSS          uint64 `json:"rss"`
+			InactiveFile uint64 `json:"inactive_file"` // 关键字段
 		} `json:"stats"`
 	} `json:"memory_stats"`
 }
@@ -295,10 +297,19 @@ func (receiver container) Stats(containerID string) DockerStatsVO {
 	}
 
 	// 计算内存使用率（MB）
-	dockerStatsVO.MemoryUsage = (stats.MemoryStats.Usage - stats.MemoryStats.Stats.Cache) / 1024 / 1024
+	memUsage := stats.MemoryStats.Usage
+	if stats.MemoryStats.Stats.InactiveFile > 0 {
+		// 优先使用 inactive_file（与 Docker CLI 源码一致）
+		memUsage -= stats.MemoryStats.Stats.InactiveFile
+	} else if stats.MemoryStats.Stats.Cache > 0 {
+		// 没有 inactive_file 时使用 cache
+		memUsage -= stats.MemoryStats.Stats.Cache
+	}
+
+	dockerStatsVO.MemoryUsage = memUsage / 1024 / 1024
 	dockerStatsVO.MemoryLimit = stats.MemoryStats.Limit / 1024 / 1024
 	if stats.MemoryStats.Limit > 0 {
-		dockerStatsVO.MemoryUsagePercent = float64(stats.MemoryStats.Usage-stats.MemoryStats.Stats.Cache) / float64(stats.MemoryStats.Limit) * 100
+		dockerStatsVO.MemoryUsagePercent = float64(memUsage) / float64(stats.MemoryStats.Limit) * 100
 	}
 
 	return dockerStatsVO
