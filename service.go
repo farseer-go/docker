@@ -235,9 +235,6 @@ func (receiver service) PS(lstNode collections.List[DockerNodeVO], serviceName s
 				Image string `json:"Image"`
 			} `json:"ContainerSpec"`
 		} `json:"Spec"`
-		ServiceAnnotations struct {
-			Name string `json:"Name"`
-		} `json:"ServiceAnnotations"`
 		// 全局服务可能需要 Index
 		Index int `json:"Index"`
 	}
@@ -270,12 +267,31 @@ func (receiver service) PS(lstNode collections.List[DockerNodeVO], serviceName s
 	}
 
 	// 4. 处理分组数据
+	// 辅助函数：定义状态优先级 (数字越小优先级越高，越应该排在前面)
+	getStatePriority := func(state string) int {
+		switch state {
+		case "running", "starting", "pending", "ready":
+			return 1 // 活跃状态优先级最高
+		case "failed", "rejected":
+			return 3 // 失败状态优先级最低
+		case "shutdown", "complete", "orphaned":
+			return 2 // 结束状态优先级中等
+		default:
+			return 4
+		}
+	}
 	for _, taskGroup := range slotMap {
 		// 按时间排序：最新的排在前面
 		sort.Slice(taskGroup, func(i, j int) bool {
 			// t1, _ := time.Parse(time.RFC3339Nano, taskGroup[i].Status.Timestamp)
 			// t2, _ := time.Parse(time.RFC3339Nano, taskGroup[j].Status.Timestamp)
 			// return t1.After(t2)
+			// 1. 首先比较状态优先级 (优先展示 Running 的任务)
+			pI := getStatePriority(taskGroup[i].Status.State)
+			pJ := getStatePriority(taskGroup[j].Status.State)
+			if pI != pJ {
+				return pI < pJ // 优先级小的排前面
+			}
 			return taskGroup[i].CreatedAt.After(taskGroup[j].CreatedAt)
 		})
 
@@ -291,7 +307,7 @@ func (receiver service) PS(lstNode collections.List[DockerNodeVO], serviceName s
 		// 构造 VO
 		vo := ServiceTaskVO{
 			ServiceTaskId: mainTask.ID,
-			Name:          fmt.Sprintf("%s.%d", mainTask.ServiceAnnotations.Name, mainTask.Slot), // 模拟 CLI 名称: service.1
+			Name:          fmt.Sprintf("%s.%d", serviceName, mainTask.Slot), // 模拟 CLI 名称: service.1
 			Image:         mainTask.Spec.ContainerSpec.Image,
 			Node:          mainTask.NodeID, // 先放 NodeID，后续可以转换为 NodeName
 			State:         mainTask.Status.State,
