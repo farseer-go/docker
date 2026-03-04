@@ -6,15 +6,6 @@ import (
 	"github.com/farseer-go/collections"
 )
 
-// ServiceListVO 容器的名称 实例数量 副本数量 镜像（docker service ls）
-type ServiceListVO struct {
-	Id        string // 容器ID
-	Name      string // 容器名称
-	Instances int    // 实例数量
-	Replicas  int    // 副本数量
-	Image     string // 镜像
-}
-
 // TaskInstanceVO 容器的实例信息 docker service ps fops
 type ServiceTaskVO struct {
 	ServiceTaskId string                           // 任务ID
@@ -56,7 +47,7 @@ type DockerStatsVO struct {
 }
 
 // ServiceInspectJson 服务详情
-type ServiceInspectJson []struct {
+type ServiceInspectJson struct {
 	ID      string `json:"ID"`
 	Version struct {
 		Index int `json:"Index"`
@@ -197,7 +188,7 @@ type ServiceInspectJson []struct {
 	} `json:"UpdateStatus"`
 }
 
-type ServiceIdInspectJson []struct {
+type ServiceIdInspectJson struct {
 	ID      string `json:"ID"`
 	Version struct {
 		Index int `json:"Index"`
@@ -300,8 +291,7 @@ type ServiceIdInspectJson []struct {
 		Addresses []string `json:"Addresses"`
 	} `json:"NetworksAttachments"`
 }
-
-type ContainerIdInspectJson []struct {
+type ContainerIdInspectJson struct {
 	ID      string        `json:"Id"`
 	Created time.Time     `json:"Created"`
 	Path    string        `json:"Path"`
@@ -352,6 +342,7 @@ type ContainerIdInspectJson []struct {
 		AutoRemove           bool          `json:"AutoRemove"`
 		VolumeDriver         string        `json:"VolumeDriver"`
 		VolumesFrom          interface{}   `json:"VolumesFrom"`
+		ConsoleSize          []int         `json:"ConsoleSize"`
 		CapAdd               interface{}   `json:"CapAdd"`
 		CapDrop              interface{}   `json:"CapDrop"`
 		CgroupnsMode         string        `json:"CgroupnsMode"`
@@ -373,11 +364,10 @@ type ContainerIdInspectJson []struct {
 		UsernsMode           string        `json:"UsernsMode"`
 		ShmSize              int           `json:"ShmSize"`
 		Runtime              string        `json:"Runtime"`
-		ConsoleSize          []int         `json:"ConsoleSize"`
 		Isolation            string        `json:"Isolation"`
 		CPUShares            int           `json:"CpuShares"`
-		Memory               int           `json:"Memory"`
-		NanoCpus             int           `json:"NanoCpus"`
+		Memory               int64         `json:"Memory"`
+		NanoCpus             int64         `json:"NanoCpus"`
 		CgroupParent         string        `json:"CgroupParent"`
 		BlkioWeight          int           `json:"BlkioWeight"`
 		BlkioWeightDevice    interface{}   `json:"BlkioWeightDevice"`
@@ -394,10 +384,8 @@ type ContainerIdInspectJson []struct {
 		Devices              interface{}   `json:"Devices"`
 		DeviceCgroupRules    interface{}   `json:"DeviceCgroupRules"`
 		DeviceRequests       interface{}   `json:"DeviceRequests"`
-		KernelMemory         int           `json:"KernelMemory"`
-		KernelMemoryTCP      int           `json:"KernelMemoryTCP"`
 		MemoryReservation    int           `json:"MemoryReservation"`
-		MemorySwap           int           `json:"MemorySwap"`
+		MemorySwap           int64         `json:"MemorySwap"`
 		MemorySwappiness     interface{}   `json:"MemorySwappiness"`
 		OomKillDisable       bool          `json:"OomKillDisable"`
 		PidsLimit            interface{}   `json:"PidsLimit"`
@@ -407,9 +395,19 @@ type ContainerIdInspectJson []struct {
 		IOMaximumIOps        int           `json:"IOMaximumIOps"`
 		IOMaximumBandwidth   int           `json:"IOMaximumBandwidth"`
 		Mounts               []struct {
-			Type   string `json:"Type"`
-			Source string `json:"Source"`
-			Target string `json:"Target"`
+			Type          string `json:"Type"`
+			Source        string `json:"Source"`
+			Target        string `json:"Target"`
+			VolumeOptions struct {
+				DriverConfig struct {
+					Name    string `json:"Name"`
+					Options struct {
+						Device string `json:"device"`
+						O      string `json:"o"`
+						Type   string `json:"type"`
+					} `json:"Options"`
+				} `json:"DriverConfig"`
+			} `json:"VolumeOptions,omitempty"`
 		} `json:"Mounts"`
 		MaskedPaths   []string `json:"MaskedPaths"`
 		ReadonlyPaths []string `json:"ReadonlyPaths"`
@@ -431,35 +429,44 @@ type ContainerIdInspectJson []struct {
 		Mode        string `json:"Mode"`
 		RW          bool   `json:"RW"`
 		Propagation string `json:"Propagation"`
+		Name        string `json:"Name,omitempty"`
+		Driver      string `json:"Driver,omitempty"`
 	} `json:"Mounts"`
 	Config struct {
-		Hostname     string            `json:"Hostname"`
-		Domainname   string            `json:"Domainname"`
-		User         string            `json:"User"`
-		AttachStdin  bool              `json:"AttachStdin"`
-		AttachStdout bool              `json:"AttachStdout"`
-		AttachStderr bool              `json:"AttachStderr"`
-		Tty          bool              `json:"Tty"`
-		OpenStdin    bool              `json:"OpenStdin"`
-		StdinOnce    bool              `json:"StdinOnce"`
-		Env          []string          `json:"Env"`
-		Cmd          interface{}       `json:"Cmd"`
-		Image        string            `json:"Image"`
-		Volumes      interface{}       `json:"Volumes"`
-		WorkingDir   string            `json:"WorkingDir"`
-		Entrypoint   []string          `json:"Entrypoint"`
-		OnBuild      interface{}       `json:"OnBuild"`
-		Labels       map[string]string `json:"Labels"`
+		Hostname     string      `json:"Hostname"`
+		Domainname   string      `json:"Domainname"`
+		User         string      `json:"User"`
+		AttachStdin  bool        `json:"AttachStdin"`
+		AttachStdout bool        `json:"AttachStdout"`
+		AttachStderr bool        `json:"AttachStderr"`
+		Tty          bool        `json:"Tty"`
+		OpenStdin    bool        `json:"OpenStdin"`
+		StdinOnce    bool        `json:"StdinOnce"`
+		Env          []string    `json:"Env"`
+		Cmd          interface{} `json:"Cmd"`
+		Image        string      `json:"Image"`
+		Volumes      interface{} `json:"Volumes"`
+		WorkingDir   string      `json:"WorkingDir"`
+		Entrypoint   []string    `json:"Entrypoint"`
+		OnBuild      interface{} `json:"OnBuild"`
+		Labels       struct {
+			ComDockerSwarmNodeID      string `json:"com.docker.swarm.node.id"`
+			ComDockerSwarmServiceID   string `json:"com.docker.swarm.service.id"`
+			ComDockerSwarmServiceName string `json:"com.docker.swarm.service.name"`
+			ComDockerSwarmTask        string `json:"com.docker.swarm.task"`
+			ComDockerSwarmTaskID      string `json:"com.docker.swarm.task.id"`
+			ComDockerSwarmTaskName    string `json:"com.docker.swarm.task.name"`
+		} `json:"Labels"`
 	} `json:"Config"`
 	NetworkSettings struct {
-		Bridge                 string `json:"Bridge"`
-		SandboxID              string `json:"SandboxID"`
-		HairpinMode            bool   `json:"HairpinMode"`
-		LinkLocalIPv6Address   string `json:"LinkLocalIPv6Address"`
-		LinkLocalIPv6PrefixLen int    `json:"LinkLocalIPv6PrefixLen"`
-		Ports                  struct {
+		Bridge     string `json:"Bridge"`
+		SandboxID  string `json:"SandboxID"`
+		SandboxKey string `json:"SandboxKey"`
+		Ports      struct {
 		} `json:"Ports"`
-		SandboxKey             string      `json:"SandboxKey"`
+		HairpinMode            bool        `json:"HairpinMode"`
+		LinkLocalIPv6Address   string      `json:"LinkLocalIPv6Address"`
+		LinkLocalIPv6PrefixLen int         `json:"LinkLocalIPv6PrefixLen"`
 		SecondaryIPAddresses   interface{} `json:"SecondaryIPAddresses"`
 		SecondaryIPv6Addresses interface{} `json:"SecondaryIPv6Addresses"`
 		EndpointID             string      `json:"EndpointID"`
@@ -476,7 +483,8 @@ type ContainerIdInspectJson []struct {
 					IPv4Address string `json:"IPv4Address"`
 				} `json:"IPAMConfig"`
 				Links               interface{} `json:"Links"`
-				Aliases             []string    `json:"Aliases"`
+				Aliases             interface{} `json:"Aliases"`
+				MacAddress          string      `json:"MacAddress"`
 				NetworkID           string      `json:"NetworkID"`
 				EndpointID          string      `json:"EndpointID"`
 				Gateway             string      `json:"Gateway"`
@@ -485,8 +493,8 @@ type ContainerIdInspectJson []struct {
 				IPv6Gateway         string      `json:"IPv6Gateway"`
 				GlobalIPv6Address   string      `json:"GlobalIPv6Address"`
 				GlobalIPv6PrefixLen int         `json:"GlobalIPv6PrefixLen"`
-				MacAddress          string      `json:"MacAddress"`
 				DriverOpts          interface{} `json:"DriverOpts"`
+				DNSNames            []string    `json:"DNSNames"`
 			} `json:"net"`
 		} `json:"Networks"`
 	} `json:"NetworkSettings"`

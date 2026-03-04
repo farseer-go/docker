@@ -12,7 +12,6 @@ import (
 	"path"
 
 	"github.com/farseer-go/collections"
-	"github.com/farseer-go/fs/snc"
 	"github.com/farseer-go/utils/exec"
 )
 
@@ -22,31 +21,63 @@ type container struct {
 
 // Exists 判断容器是否已创建
 func (receiver container) Exists(containerId string) bool {
-	// docker inspect fops
-	lstMessage, exitCode := exec.RunShellCommand(fmt.Sprintf("docker inspect %s", containerId), nil, "", false)
-	if exitCode != 0 {
-		if lstMessage.Contains("[]") && lstMessage.ContainsPrefix("Error: No such object:") {
-			return false
-		}
+	url := fmt.Sprintf("http://localhost/containers/%s/json", containerId)
+
+	// 使用 UnixGet (工具方法内已处理 Body 关闭)
+	resp, err := UnixGet(receiver.unixClient, url)
+	if err != nil {
 		return false
 	}
-	if lstMessage.Contains("[]") && lstMessage.ContainsPrefix("Error: No such object:") {
-		return false
-	}
-	return lstMessage.ContainsAny(fmt.Sprintf("\"Name\": \"/%s\",", containerId))
+
+	return resp.StatusCode == http.StatusOK
 }
 
 // Kill 停止容器并删除
-func (receiver container) Kill(containerId string) (chan string, func() int) {
-	return exec.RunShell(fmt.Sprintf("docker kill %s", containerId), nil, "", false)
+func (receiver container) Kill(containerId string) error {
+	url := fmt.Sprintf("http://localhost/containers/%s/kill", containerId)
+
+	// 使用 UnixPost，内部已判断 204 并生成 error
+	_, err := UnixPost(receiver.unixClient, url)
+	return err
 }
 
 // RM 删除容器
-func (receiver container) RM(containerId string) (chan string, func() int) {
-	return exec.RunShell(fmt.Sprintf("docker rm %s", containerId), nil, "", false)
+func (receiver container) RM(containerId string) error {
+	url := fmt.Sprintf("http://localhost/containers/%s", containerId)
+
+	// 使用 UnixDelete
+	_, err := UnixDelete(receiver.unixClient, url)
+	return err
 }
 
-// 运行容器
+// Restart 重启容器
+func (receiver container) Restart(containerId string) error {
+	url := fmt.Sprintf("http://localhost/containers/%s/restart", containerId)
+
+	// 使用 UnixPost，内部已处理状态码判断和错误封装
+	_, err := UnixPost(receiver.unixClient, url)
+	return err
+}
+
+// Inspect 查看容器详情
+func (receiver container) Inspect(containerId string) (ContainerIdInspectJson, error) {
+	// curl --unix-socket /var/run/docker.sock http://localhost/containers/kb44fvovlg1o/json
+	url := fmt.Sprintf("http://localhost/containers/%s/json", containerId)
+
+	// 1. 使用工具函数直接请求并解析
+	// 注意：您的工具函数忽略了 HTTP 错误码和 JSON 解析错误，这里直接使用
+	result, _ := UnixGetDecode[ContainerIdInspectJson](receiver.unixClient, url)
+
+	// 2. 通过判断 ID 是否为空来确定容器是否存在
+	// Docker 404 错误返回的是 {"message": "..."}，解析后 ID 字段为空
+	if result.ID == "" {
+		return result, nil
+	}
+
+	return result, nil
+}
+
+// 运行容器(使用Docker CLI客户端)
 func (receiver container) Run(containerId string, networkName string, dockerImage string, args []string, useRm bool, env map[string]string, ctx context.Context) (chan string, func() int) {
 	bf := bytes.Buffer{}
 	bf.WriteString("docker run")
@@ -74,12 +105,7 @@ func (receiver container) Run(containerId string, networkName string, dockerImag
 	return exec.RunShellContext(ctx, bf.String(), env, "", true)
 }
 
-// Restart 重启容器
-func (receiver container) Restart(containerId string) (chan string, func() int) {
-	return exec.RunShell(fmt.Sprintf("docker restart %s", containerId), nil, "", false)
-}
-
-// 在容器内部执行cmd命令
+// 在容器内部执行cmd命令(使用Docker CLI客户端)
 func (receiver container) Exec(containerId string, execCmd string, env map[string]string, ctx context.Context) (chan string, func() int) {
 	if env == nil {
 		env = make(map[string]string)
@@ -99,7 +125,7 @@ func (receiver container) Exec(containerId string, execCmd string, env map[strin
 	return exec.RunShellContext(ctx, bf.String(), nil, "", false)
 }
 
-// Cp 复制文件到容器内
+// Cp 复制文件到容器内(使用Docker CLI客户端)
 func (receiver container) Cp(containerId string, sourceFile, destFile string, ctx context.Context) (chan string, func() int) {
 	_, wait := receiver.Exec(containerId, "mkdir -p "+path.Dir(destFile), nil, ctx)
 	wait()
@@ -171,39 +197,6 @@ func (receiver container) Logs(containerId string, tailCount int) collections.Li
 	return result
 }
 
-// Inspect 查看容器详情
-func (receiver container) Inspect(containerId string) (ContainerIdInspectJson, error) {
-	// docker inspect rqcinkiry0jr
-	lst, _ := exec.RunShellCommand(fmt.Sprintf("docker inspect %s", containerId), nil, "", false)
-	if lst.ContainsAny("No such object") {
-		return nil, nil
-	}
-
-	var containerInspectJson ContainerIdInspectJson
-	serviceInspectContent := lst.ToString("\n")
-	err := snc.Unmarshal([]byte(serviceInspectContent), &containerInspectJson)
-
-	return containerInspectJson, err
-}
-
-// InspectByServiceId 查看服务详情
-func (receiver container) InspectByServiceId(serviceId string) (ServiceIdInspectJson, error) {
-	// docker inspect rqcinkiry0jr
-	lst, _ := exec.RunShellCommand(fmt.Sprintf("docker inspect %s", serviceId), nil, "", false)
-	if lst.ContainsAny("No such object") {
-		return nil, nil
-	}
-
-	var serviceIdInspectJson ServiceIdInspectJson
-	serviceInspectContent := lst.ToString("\n")
-	err := snc.Unmarshal([]byte(serviceInspectContent), &serviceIdInspectJson)
-	// 使用简短的容器ID
-	if len(serviceIdInspectJson) > 0 && len(serviceIdInspectJson[0].Status.ContainerStatus.ContainerID) >= 12 {
-		serviceIdInspectJson[0].Status.ContainerStatus.ContainerID = serviceIdInspectJson[0].Status.ContainerStatus.ContainerID[:12]
-	}
-	return serviceIdInspectJson, err
-}
-
 // Container 容器信息
 type Container struct {
 	ID      string        `json:"Id"`
@@ -268,7 +261,7 @@ func (receiver container) List(status string, labels map[string]string) (collect
 		url += "&label=" + k + "=" + v
 	}
 
-	containers, err := UnixGet[collections.List[Container]](receiver.unixClient, url)
+	containers, err := UnixGetDecode[collections.List[Container]](receiver.unixClient, url)
 	return containers, err
 }
 
@@ -310,7 +303,7 @@ func (receiver container) Stats(containerID string) DockerStatsVO {
 	// curl --unix-socket /var/run/docker.sock http://localhost/containers/9e76ea4b0231/stats?stream=false
 	url := fmt.Sprintf("http://localhost/containers/%s/stats?stream=false", containerID)
 
-	stats, err := UnixGet[StatsResponse](receiver.unixClient, url)
+	stats, err := UnixGetDecode[StatsResponse](receiver.unixClient, url)
 	if err != nil {
 		return dockerStatsVO
 	}

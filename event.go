@@ -12,28 +12,6 @@ type event struct {
 	unixClient *http.Client
 }
 
-// Watch 持续获取docker事件
-func (receiver event) Watch() chan EventResult {
-	eventResultChan := make(chan EventResult, 1000)
-	progress, wait := exec.RunShell("docker events --format '{{json .}}'", nil, "", false)
-
-	// 将读取到的json事件信息转换成EventResult结构体
-	worker := async.New()
-	worker.Add(func() {
-		for json := range progress {
-			var eventResult EventResult
-			snc.Unmarshal([]byte(json), &eventResult)
-			eventResultChan <- eventResult
-		}
-	})
-
-	defer worker.Wait()
-
-	wait()
-
-	return eventResultChan
-}
-
 // docker 事件结构体
 type EventResult struct {
 	Status string `json:"status"` // 事件类型
@@ -57,4 +35,26 @@ type EventResult struct {
 	Scope    string `json:"scope"`
 	Time     int    `json:"time"`     // 发生时间（秒）
 	TimeNano int64  `json:"timeNano"` // 发生时间（纳秒）
+}
+
+// Watch 持续获取docker事件(使用Docker CLI客户端)
+func (receiver event) Watch() chan EventResult {
+	eventResultChan := make(chan EventResult, 1000)
+	progress, wait := exec.RunShell("docker events --format '{{json .}}'", nil, "", false)
+
+	// 将读取到的json事件信息转换成EventResult结构体
+	worker := async.New()
+	worker.Add(func() {
+		for json := range progress {
+			var eventResult EventResult
+			snc.Unmarshal([]byte(json), &eventResult)
+			eventResultChan <- eventResult
+		}
+	})
+
+	defer worker.Wait()
+
+	wait()
+
+	return eventResultChan
 }

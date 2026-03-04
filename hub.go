@@ -11,7 +11,7 @@ type hub struct {
 	unixClient *http.Client
 }
 
-// Login 登陆仓库
+// Login 登陆仓库(使用Docker CLI客户端)
 func (receiver hub) Login(dockerHub string, loginName string, loginPwd string) (chan string, func() int) {
 	if loginName != "" && loginPwd != "" {
 		// 不包含域名的，意味着是登陆docker官网，不需要额外设置登陆的URL

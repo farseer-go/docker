@@ -3,7 +3,6 @@ package docker
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/farseer-go/collections"
@@ -15,6 +14,7 @@ type node struct {
 
 // DockerNodeVO 集群节点信息 docker node ls
 type DockerNodeVO struct {
+	ID          string `json:"ID"` // 节点ID
 	Description struct {
 		Hostname string `json:"Hostname"` // 节点名称
 		Platform struct {
@@ -66,7 +66,7 @@ type DockerLabelVO struct {
 func (receiver node) List() collections.List[DockerNodeVO] {
 	// curl --unix-socket /var/run/docker.sock http://localhost/nodes
 	nodesUrl := "http://localhost/nodes"
-	nodes, err := UnixGet[collections.List[DockerNodeVO]](receiver.unixClient, nodesUrl)
+	nodes, err := UnixGetDecode[collections.List[DockerNodeVO]](receiver.unixClient, nodesUrl)
 	if err != nil {
 		return nodes
 	}
@@ -92,19 +92,20 @@ func (receiver node) List() collections.List[DockerNodeVO] {
 
 // Info 获取节点详情
 func (receiver node) Info(nodeName string) DockerNodeVO {
-	vo := DockerNodeVO{
-		Label: collections.NewList[DockerLabelVO](),
-	}
+	// 2. 调用接口
+	// 直接请求 /nodes/{name}，返回单个对象
+	url := fmt.Sprintf("http://localhost/nodes/%s", nodeName)
 
-	filter := fmt.Sprintf(`{"name":{"%s":true}}`, nodeName)
-	apiUrl := "http://localhost/nodes?filters=" + url.QueryEscape(filter)
-	nodes, err := UnixGet[collections.List[DockerNodeVO]](receiver.unixClient, apiUrl)
-	if err != nil || nodes.Count() == 0 {
-		return vo
-	}
+	// 使用泛型获取数据
+	nodeData, _ := UnixGetDecode[DockerNodeVO](receiver.unixClient, url)
 
-	// 取第一个匹配的节点
-	nodeData := nodes.First()
+	// 3. 转换为业务 VO
+	nodeData.Label = collections.NewList[DockerLabelVO]()
+
+	// 如果关键数据为空，说明节点不存在
+	if nodeData.Status.Addr == "" {
+		return nodeData
+	}
 
 	// 处理 CPU (API 返回 NanoCPUs，需要除以 1e9)
 	if nodeData.Description.Resources.NanoCPUs > 0 {
@@ -113,17 +114,17 @@ func (receiver node) Info(nodeName string) DockerNodeVO {
 
 	// 处理 Memory (API 返回 Bytes，这里转为 GB，保留2位小数)
 	if nodeData.Description.Resources.MemoryBytes > 0 {
-		vo.Description.Resources.Memory = fmt.Sprintf("%.2fGB", float64(nodeData.Description.Resources.MemoryBytes)/1024/1024/1024)
+		nodeData.Description.Resources.Memory = fmt.Sprintf("%.2fGB", float64(nodeData.Description.Resources.MemoryBytes)/1024/1024/1024)
 	}
 
 	// 处理 Labels
 	// API 返回的是 map[string]string，转换为 List[DockerLabelVO]
 	for k, v := range nodeData.Spec.Labels {
-		vo.Label.Add(DockerLabelVO{
+		nodeData.Label.Add(DockerLabelVO{
 			Name:  k,
 			Value: v,
 		})
 	}
 
-	return vo
+	return nodeData
 }

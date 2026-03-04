@@ -17,6 +17,7 @@ type Client struct {
 	Hub        hub
 	Images     images
 	Event      event
+	Task       task
 	unixClient *http.Client
 }
 
@@ -39,6 +40,7 @@ func NewClient() *Client {
 		Hub:        hub{unixClient: unixClient},
 		Images:     images{unixClient: unixClient},
 		Event:      event{unixClient: unixClient},
+		Task:       task{unixClient: unixClient},
 	}
 	return client
 }
@@ -50,7 +52,7 @@ func (receiver Client) GetVersion() string {
 		Version    string `json:"Version"`    // Docker 版本
 		ApiVersion string `json:"ApiVersion"` // API 版本
 	}
-	version, _ := UnixGet[VersionResponse](receiver.unixClient, "http://localhost/version")
+	version, _ := UnixGetDecode[VersionResponse](receiver.unixClient, "http://localhost/version")
 	return version.Version
 }
 
@@ -101,6 +103,6 @@ type DockerInfo struct {
 
 func (receiver Client) GetInfo() DockerInfo {
 	// curl --unix-socket /var/run/docker.sock http://localhost/info
-	apiData, _ := UnixGet[DockerInfo](receiver.unixClient, "http://localhost/info")
+	apiData, _ := UnixGetDecode[DockerInfo](receiver.unixClient, "http://localhost/info")
 	return apiData
 }
