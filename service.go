@@ -137,16 +137,17 @@ func (receiver service) Logs(serviceIdOrServiceName string, tailCount int) (coll
 	}
 
 	lstLog.Foreach(func(item *string) {
+		// fops.1.l71hvj98bsqx@master    | 2026-03-04 17:57:02.672616 Initialization completed, total time: 344 ms
 		logs := strings.SplitN(*item, "|", 2)
 		if len(logs) != 2 {
 			return
 		}
 
-		// 得到容器名称和节点名称
+		// 得到容器名称和节点名称 fops.1.l71hvj98bsqx@master
 		name_Id_NodeName := strings.TrimSpace(logs[0])
 		// 日志内容
 		content := strings.TrimSpace(logs[1])
-		// 节点名称
+		// 节点名称 fops.1.l71hvj98bsqx		master
 		name_Id, nodeName, _ := strings.Cut(name_Id_NodeName, "@")
 		// 服务ID和名称
 		var serverName string
@@ -211,6 +212,7 @@ func (receiver service) List() collections.List[ServiceListVO] {
 
 // PS 获取容器运行的实例信息
 func (receiver service) PS(lstNode collections.List[DockerNodeVO], serviceName string) collections.List[ServiceTaskVO] {
+	// curl --unix-socket /var/run/docker.sock http://localhost/tasks?filters=%7B%22service%22%3A%7B%22fops%22%3Atrue%7D%7D
 	lstTaskGroupVO := collections.NewList[ServiceTaskVO]()
 
 	// 1. 获取任务列表
@@ -219,10 +221,11 @@ func (receiver service) PS(lstNode collections.List[DockerNodeVO], serviceName s
 	tasksUrl := "http://localhost/tasks?filters=" + url.QueryEscape(filter)
 
 	type swarmTask struct {
-		ID     string `json:"ID"`
-		Slot   int    `json:"Slot"`
-		NodeID string `json:"NodeID"`
-		Status struct {
+		ID        string    `json:"ID"`
+		Slot      int       `json:"Slot"`
+		NodeID    string    `json:"NodeID"`
+		CreatedAt time.Time `json:"CreatedAt"`
+		Status    struct {
 			Timestamp string `json:"Timestamp"`
 			State     string `json:"State"`
 			Err       string `json:"Err"`
@@ -270,9 +273,10 @@ func (receiver service) PS(lstNode collections.List[DockerNodeVO], serviceName s
 	for _, taskGroup := range slotMap {
 		// 按时间排序：最新的排在前面
 		sort.Slice(taskGroup, func(i, j int) bool {
-			t1, _ := time.Parse(time.RFC3339Nano, taskGroup[i].Status.Timestamp)
-			t2, _ := time.Parse(time.RFC3339Nano, taskGroup[j].Status.Timestamp)
-			return t1.After(t2)
+			// t1, _ := time.Parse(time.RFC3339Nano, taskGroup[i].Status.Timestamp)
+			// t2, _ := time.Parse(time.RFC3339Nano, taskGroup[j].Status.Timestamp)
+			// return t1.After(t2)
+			return taskGroup[i].CreatedAt.After(taskGroup[j].CreatedAt)
 		})
 
 		// 最新的任务作为主任务
