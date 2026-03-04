@@ -90,15 +90,19 @@ type DockerInfo struct {
 	MemTotal          int64     `json:"MemTotal"`          // 内存总量，单位字节
 	ServerVersion     string    `json:"ServerVersion"`     // Docker版本
 	Swarm             struct {
-		NodeAddr         string     `json:"NodeAddr"`
+		NodeID           string     `json:"NodeID"`           // 当前节点ID
+		NodeAddr         string     `json:"NodeAddr"`         // 当前节点IP地址
 		ControlAvailable bool       `json:"ControlAvailable"` // 对应 IsMaster
+		LocalNodeState   string     `json:"LocalNodeState"`   // active - 当前节点状态
 		RemoteManagers   []struct { // 集群中远程管理节点的信息
 			NodeID string `json:"NodeID"` // 远程管理节点的ID
 			Addr   string `json:"Addr"`   // 远程管理节点的地址
 		} `json:"RemoteManagers"`
-		Nodes    int `json:"Nodes"`    // 集群中节点总数
-		Managers int `json:"Managers"` // 集群中管理节点数量
+		Nodes    int    `json:"Nodes"`    // 集群中节点总数
+		Managers int    `json:"Managers"` // 集群中管理节点数量
+		Error    string `json:"Error"`    // 集群错误信息，如果没有错误则为空字符串
 	} `json:"Swarm"`
+	Labels map[string]string `json:"Labels"` // Docker节点标签
 }
 
 func (receiver Client) GetInfo() DockerInfo {
