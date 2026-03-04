@@ -37,6 +37,8 @@ func (receiver service) Inspect(serviceName string) (ServiceInspectJson, error) 
 		return result, errors.New("no such service")
 	}
 
+	result.Spec.TaskTemplate.ContainerSpec.Image = strings.Split(result.Spec.TaskTemplate.ContainerSpec.Image, "@")[0]                 // 去掉 digest 部分
+	result.PreviousSpec.TaskTemplate.ContainerSpec.Image = strings.Split(result.PreviousSpec.TaskTemplate.ContainerSpec.Image, "@")[0] // 去掉 digest 部分
 	return result, nil
 }
 
@@ -190,6 +192,7 @@ type ServiceListVO struct {
 
 // List 获取所有Service
 func (receiver service) List() collections.List[ServiceListVO] {
+	// curl --unix-socket /var/run/docker.sock http://localhost/services
 	// 1. 获取服务列表
 	// API: GET /services
 	services, _ := UnixGetDecode[collections.List[ServiceListVO]](receiver.unixClient, "http://localhost/services")
@@ -206,6 +209,7 @@ func (receiver service) List() collections.List[ServiceListVO] {
 				svc.Replicas = int(r)
 			}
 		}
+		svc.Spec.TaskTemplate.ContainerSpec.Image = strings.Split(svc.Spec.TaskTemplate.ContainerSpec.Image, "@")[0] // 去掉 digest 部分
 	})
 	return services
 }
@@ -263,6 +267,7 @@ func (receiver service) PS(lstNode collections.List[DockerNodeVO], serviceName s
 			task.NodeID = curNode.Description.Hostname
 		}
 
+		task.Spec.ContainerSpec.Image = strings.Split(task.Spec.ContainerSpec.Image, "@")[0] // 去掉 digest 部分
 		slotMap[task.Slot] = append(slotMap[task.Slot], task)
 	}
 
