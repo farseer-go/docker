@@ -179,15 +179,19 @@ func (receiver service) Logs(serviceIdOrServiceName string, tailCount int) (coll
 type ServiceListVO struct {
 	ID   string `json:"ID"`
 	Spec struct {
-		Name         string                 `json:"Name"`
-		Mode         map[string]interface{} `json:"Mode"` // 动态解析 Replicated 或 Global
+		Name string `json:"Name"`
+		Mode struct {
+			Replicated struct {
+				Replicas int `json:"Replicas"` // 副本数量
+			} `json:"Replicated,omitempty"`
+			Global any
+		} `json:"Mode"`
 		TaskTemplate struct {
 			ContainerSpec struct {
 				Image string `json:"Image"`
 			} `json:"ContainerSpec"`
 		} `json:"TaskTemplate"`
 	} `json:"Spec"`
-	Replicas int // 副本数量
 }
 
 // List 获取所有Service
@@ -202,13 +206,6 @@ func (receiver service) List() collections.List[ServiceListVO] {
 
 	// 4. 组装数据
 	services.Foreach(func(svc *ServiceListVO) {
-		// 解析期望副本数
-		// 尝试解析 Replicated 模式
-		if repl, ok := svc.Spec.Mode["Replicated"].(map[string]interface{}); ok {
-			if r, ok := repl["Replicas"].(float64); ok {
-				svc.Replicas = int(r)
-			}
-		}
 		svc.Spec.TaskTemplate.ContainerSpec.Image = strings.Split(svc.Spec.TaskTemplate.ContainerSpec.Image, "@")[0] // 去掉 digest 部分
 	})
 	return services
