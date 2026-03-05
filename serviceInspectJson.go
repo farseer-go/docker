@@ -11,7 +11,9 @@ type ServiceTaskVO struct {
 	ServiceTaskId string                           // 任务ID
 	Name          string                           // 容器名称
 	Image         string                           // 镜像
-	Node          string                           // 节点
+	NodeID        string                           // 节点ID
+	NodeName      string                           // 节点名称
+	NodeIP        string                           // 节点IP
 	State         string                           // 状态   Shutdown Running
 	StateInfo     string                           // 状态
 	Error         string                           // 错误信息
@@ -21,7 +23,9 @@ type ServiceTaskVO struct {
 type TaskInstanceVO struct {
 	TaskId    string // 任务ID
 	Image     string // 镜像
-	Node      string // 节点
+	NodeID    string // 节点ID
+	NodeName  string // 节点名称
+	NodeIP    string // 节点IP
 	State     string // 状态   Shutdown Running
 	StateInfo string // 状态
 	Error     string // 错误信息

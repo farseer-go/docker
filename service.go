@@ -222,9 +222,11 @@ func (receiver service) PS(lstNode collections.List[DockerNodeVO], serviceName s
 	tasksUrl := "http://localhost/tasks?filters=" + url.QueryEscape(filter)
 
 	type swarmTask struct {
-		ID        string    `json:"ID"`
-		Slot      int       `json:"Slot"`
-		NodeID    string    `json:"NodeID"`
+		ID        string `json:"ID"`
+		Slot      int    `json:"Slot"`
+		NodeID    string `json:"NodeID"`
+		NodeName  string
+		NodeIP    string
 		CreatedAt time.Time `json:"CreatedAt"`
 		Status    struct {
 			Timestamp string `json:"Timestamp"`
@@ -256,12 +258,13 @@ func (receiver service) PS(lstNode collections.List[DockerNodeVO], serviceName s
 			task.Slot = int(uintptr(task.Index)) // 简单防重，实际业务可能需要更复杂的逻辑
 		}
 
-		// 将节点ID转换成节点名称
+		// 根据节点ID,找到对应的节点信息，补全节点名称和IP
 		curNode := lstNode.Find(func(item *DockerNodeVO) bool {
 			return item.ID == task.NodeID
 		})
 		if curNode != nil {
-			task.NodeID = curNode.Description.Hostname
+			task.NodeName = curNode.Description.Hostname
+			task.NodeIP = curNode.Status.Addr
 		}
 
 		task.Spec.ContainerSpec.Image = strings.Split(task.Spec.ContainerSpec.Image, "@")[0] // 去掉 digest 部分
@@ -303,17 +306,17 @@ func (receiver service) PS(lstNode collections.List[DockerNodeVO], serviceName s
 		}
 
 		mainTask := taskGroup[0]
-		// 构造 StateInfo (模拟 CLI 的 "Running 17 minutes ago")
-		stateInfo := formatStateInfo(mainTask.Status.Timestamp, mainTask.Status.State)
 
 		// 构造 VO
 		vo := ServiceTaskVO{
 			ServiceTaskId: mainTask.ID,
 			Name:          fmt.Sprintf("%s.%d", serviceName, mainTask.Slot), // 模拟 CLI 名称: service.1
 			Image:         mainTask.Spec.ContainerSpec.Image,
-			Node:          mainTask.NodeID, // 先放 NodeID，后续可以转换为 NodeName
+			NodeID:        mainTask.NodeID,
+			NodeName:      mainTask.NodeName,
+			NodeIP:        mainTask.NodeIP,
 			State:         mainTask.Status.State,
-			StateInfo:     stateInfo,
+			StateInfo:     formatStateInfo(mainTask.Status.Timestamp, mainTask.Status.State), // 模拟 CLI 的 "Running 17 minutes ago"
 			Error:         mainTask.Status.Err,
 			Tasks:         collections.NewList[TaskInstanceVO](),
 		}
@@ -324,9 +327,11 @@ func (receiver service) PS(lstNode collections.List[DockerNodeVO], serviceName s
 			vo.Tasks.Add(TaskInstanceVO{
 				TaskId:    subTask.ID,
 				Image:     subTask.Spec.ContainerSpec.Image,
-				Node:      subTask.NodeID,
+				NodeID:    subTask.NodeID,
+				NodeName:  subTask.NodeName,
+				NodeIP:    subTask.NodeIP,
 				State:     subTask.Status.State,
-				StateInfo: formatStateInfo(subTask.Status.Timestamp, subTask.Status.State),
+				StateInfo: formatStateInfo(subTask.Status.Timestamp, subTask.Status.State), // 模拟 CLI 的 "Running 17 minutes ago"
 				Error:     subTask.Status.Err,
 			})
 		}
