@@ -18,17 +18,23 @@ type ServiceTaskVO struct {
 	StateInfo     string                           // 状态
 	Error         string                           // 错误信息
 	Tasks         collections.List[TaskInstanceVO] // 子任务列表
+	CreatedAt     time.Time                        // 创建时间
+	UpdatedAt     time.Time                        // 更新时间
+	Addresses     []string                         // 容器IP列表
 }
 
 type TaskInstanceVO struct {
-	TaskId    string // 任务ID
-	Image     string // 镜像
-	NodeID    string // 节点ID
-	NodeName  string // 节点名称
-	NodeIP    string // 节点IP
-	State     string // 状态   Shutdown Running
-	StateInfo string // 状态
-	Error     string // 错误信息
+	TaskId    string    // 任务ID
+	Image     string    // 镜像
+	NodeID    string    // 节点ID
+	NodeName  string    // 节点名称
+	NodeIP    string    // 节点IP
+	State     string    // 状态   Shutdown Running
+	StateInfo string    // 状态
+	Error     string    // 错误信息
+	CreatedAt time.Time // 创建时间
+	UpdatedAt time.Time // 更新时间
+	Addresses []string  // 容器IP列表
 }
 
 type DiskVO struct {
@@ -294,7 +300,12 @@ type ServiceIdInspectJson struct {
 		} `json:"Network"`
 		Addresses []string `json:"Addresses"`
 	} `json:"NetworksAttachments"`
+	// 全局服务可能需要 Index
+	Index    int `json:"Index"`
+	NodeName string
+	NodeIP   string
 }
+
 type ContainerIdInspectJson struct {
 	ID      string        `json:"Id"`
 	Created time.Time     `json:"Created"`
