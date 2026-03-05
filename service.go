@@ -129,7 +129,6 @@ type ServiceLogVO struct {
 
 // Logs 获取日志
 func (receiver service) Logs(serviceIdOrServiceName string, tailCount int) (collections.List[ServiceLogVO], error) {
-	// curl --unix-socket /var/run/docker.sock http://localhost/tasks?filters={"service":{"fops":true}}
 	// docker service logs fops
 	lstLog, exitCode := exec.RunShellCommand(fmt.Sprintf("docker service logs %s --tail %d", serviceIdOrServiceName, tailCount), nil, "", true)
 
