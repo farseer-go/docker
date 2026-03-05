@@ -322,11 +322,6 @@ func (receiver container) Stats(containerID string) DockerStatsVO {
 	dockerStatsVO.Name = parts[0]
 	dockerStatsVO.TaskId = parts[2]
 
-	// taskId 最多取 12 位
-	if len(dockerStatsVO.TaskId) > 12 {
-		dockerStatsVO.TaskId = dockerStatsVO.TaskId[:12]
-	}
-
 	// 计算 CPU 使用率
 	// 容器在这两次采样之间实际使用了多少 CPU 时间。
 	cpuDelta := float64(stats.CPUStats.CPUUsage.TotalUsage - stats.PreCPUStats.CPUUsage.TotalUsage)
