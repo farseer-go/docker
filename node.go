@@ -3,6 +3,7 @@ package docker
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/farseer-go/collections"
@@ -73,7 +74,7 @@ func (receiver node) List() collections.List[DockerNodeVO] {
 
 	// 更新健康状态
 	nodes.Foreach(func(item *DockerNodeVO) {
-		item.IsHealth = item.Status.State == "Ready" && item.Spec.Availability == "Active"
+		item.IsHealth = strings.ToLower(item.Status.State) == "ready" && strings.ToLower(item.Spec.Availability) == "active"
 		item.Description.Resources.NanoCPUs = item.Description.Resources.NanoCPUs / 1000000000
 		item.Description.Resources.Memory = fmt.Sprintf("%.2fGB", float64(item.Description.Resources.MemoryBytes)/1024/1024/1024)
 
@@ -126,5 +127,6 @@ func (receiver node) Info(nodeName string) DockerNodeVO {
 		})
 	}
 
+	nodeData.IsHealth = strings.ToLower(nodeData.Status.State) == "ready" && strings.ToLower(nodeData.Spec.Availability) == "active"
 	return nodeData
 }
