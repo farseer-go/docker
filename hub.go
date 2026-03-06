@@ -19,7 +19,8 @@ func (receiver hub) Login(dockerHub string, loginName string, loginPwd string) (
 			dockerHub = ""
 		}
 
-		return exec.RunShell("docker login "+dockerHub+" -u "+loginName+" -p "+loginPwd, nil, "", true)
+		//return exec.RunShell("docker login "+dockerHub+" -u "+loginName+" -p "+loginPwd, nil, "", true)
+		return exec.RunShell("docker", []string{"login", dockerHub, "-u", loginName, "-p", loginPwd}, nil, "", true)
 	}
 
 	result := make(chan string, 1)

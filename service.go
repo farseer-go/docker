@@ -1,8 +1,6 @@
 package docker
 
 import (
-	"bytes"
-	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -64,73 +62,107 @@ func (receiver service) Delete(serviceName string) error {
 
 // SetImagesAndReplicas 更新镜像版本和副本数量
 func (receiver service) SetImagesAndReplicas(serviceName string, dockerImages string, dockerReplicas int) (chan string, func() int) {
-	return exec.RunShell(fmt.Sprintf("docker service update --image %s --replicas %v --with-registry-auth %s --update-order start-first", dockerImages, dockerReplicas, serviceName), nil, "", false)
+	args := []string{
+		"service", "update",
+		"--image", dockerImages,
+		"--replicas", fmt.Sprintf("%d", dockerReplicas),
+		"--with-registry-auth",
+		"--update-order", "start-first",
+		serviceName,
+	}
+	return exec.RunShell("docker", args, nil, "", false)
 }
 
 // SetImages 更新镜像版本
 func (receiver service) SetImages(serviceName string, dockerImages string, updateDelay int) (chan string, func() int) {
-	var sb bytes.Buffer
-	sb.WriteString(fmt.Sprintf("docker service update --image %s  --with-registry-auth --update-order start-first", dockerImages))
+	args := []string{
+		"service", "update",
+		"--image", dockerImages,
+		"--with-registry-auth",
+		"--update-order", "start-first",
+	}
 
 	// 滚动更新时的时间间隔
 	if updateDelay > 0 {
-		sb.WriteString(fmt.Sprintf(" --update-delay=%ds", updateDelay))
+		args = append(args, fmt.Sprintf("--update-delay=%ds", updateDelay))
 	}
 
-	sb.WriteString(fmt.Sprintf(" %s", serviceName))
+	args = append(args, serviceName)
 
-	return exec.RunShell(sb.String(), nil, "", true)
+	return exec.RunShell("docker", args, nil, "", true)
 }
 
 // SetReplicas 更新副本数量
 func (receiver service) SetReplicas(serviceName string, dockerReplicas int) (chan string, func() int) {
-	return exec.RunShell(fmt.Sprintf("docker service update --replicas %v --with-registry-auth %s", dockerReplicas, serviceName), nil, "", false)
+	args := []string{
+		"service", "update",
+		"--replicas", fmt.Sprintf("%d", dockerReplicas),
+		"--with-registry-auth",
+		serviceName,
+	}
+	return exec.RunShell("docker", args, nil, "", false)
 }
 
 // Restart 重启容器
 func (receiver service) Restart(serviceName string) (chan string, func() int) {
-	return exec.RunShell(fmt.Sprintf("docker service update --with-registry-auth --force %s", serviceName), nil, "", false)
+	args := []string{
+		"service", "update",
+		"--with-registry-auth",
+		"--force",
+		serviceName,
+	}
+	return exec.RunShell("docker", args, nil, "", false)
 }
 
 // Create 创建服务
 func (receiver service) Create(serviceName, dockerNodeRole, additionalScripts, dockerNetwork string, dockerReplicas int, dockerImages string, limitCpus float64, limitMemory string) (chan string, func() int) {
-	var sb bytes.Buffer
-	sb.WriteString("docker service create --with-registry-auth --mount type=bind,src=/etc/localtime,dst=/etc/localtime")
-	sb.WriteString(fmt.Sprintf(" --name %s -d --network=%s", serviceName, dockerNetwork))
-	sb.WriteString(" --update-order start-first")
+	args := []string{
+		"service", "create",
+		"--with-registry-auth",
+		"--mount", "type=bind,src=/etc/localtime,dst=/etc/localtime",
+		"--name", serviceName,
+		"-d",
+		"--network=" + dockerNetwork,
+		"--update-order", "start-first",
+	}
 
 	// 节点筛选
-	switch dockerNodeRole {
-	case "global", "GLOBAL":
-		sb.WriteString(" --mode global")
+	switch strings.ToUpper(dockerNodeRole) {
+	case "GLOBAL":
+		args = append(args, "--mode", "global")
 	case "":
-		sb.WriteString(fmt.Sprintf("  --replicas %v", dockerReplicas))
+		args = append(args, "--replicas", fmt.Sprintf("%d", dockerReplicas))
 	default:
-		sb.WriteString(fmt.Sprintf("  --replicas %v --constraint node.role==%s", dockerReplicas, dockerNodeRole))
+		args = append(args, "--replicas", fmt.Sprintf("%d", dockerReplicas))
+		args = append(args, "--constraint", "node.role=="+dockerNodeRole)
 	}
 
 	if limitCpus > 0 {
-		sb.WriteString(fmt.Sprintf(" --limit-cpu=%f", limitCpus))
+		args = append(args, fmt.Sprintf("--limit-cpu=%f", limitCpus))
 	}
 	if limitMemory != "" {
-		sb.WriteString(fmt.Sprintf(" --limit-memory=%s", limitMemory))
+		args = append(args, "--limit-memory="+limitMemory)
 	}
-	sb.WriteString(fmt.Sprintf(" %s %s", additionalScripts, dockerImages))
 
-	return exec.RunShellContext(context.Background(), sb.String(), nil, "", true)
-}
+	// 额外参数
+	if additionalScripts != "" {
+		args = append(args, strings.Fields(additionalScripts)...)
+	}
 
-type ServiceLogVO struct {
-	ContainerId string
-	ServiceName string
-	NodeName    string
-	Logs        collections.List[string]
+	args = append(args, dockerImages)
+
+	return exec.RunShell("docker", args, nil, "", true)
 }
 
 // Logs 获取日志
 func (receiver service) Logs(serviceIdOrServiceName string, tailCount int) (collections.List[ServiceLogVO], error) {
-	// docker service logs fops
-	lstLog, exitCode := exec.RunShellCommand(fmt.Sprintf("docker service logs %s --tail %d", serviceIdOrServiceName, tailCount), nil, "", true)
+	args := []string{
+		"service", "logs",
+		serviceIdOrServiceName,
+		"--tail", fmt.Sprintf("%d", tailCount),
+	}
+
+	lstLog, exitCode := exec.RunShellCommand("docker", args, nil, "", true)
 
 	lst := collections.NewList[ServiceLogVO]()
 	if exitCode != 0 {
@@ -172,6 +204,13 @@ func (receiver service) Logs(serviceIdOrServiceName string, tailCount int) (coll
 		}
 	})
 	return lst, nil
+}
+
+type ServiceLogVO struct {
+	ContainerId string
+	ServiceName string
+	NodeName    string
+	Logs        collections.List[string]
 }
 
 // ServiceListVO 容器的名称 实例数量 副本数量 镜像（docker service ls）

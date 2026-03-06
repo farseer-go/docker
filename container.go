@@ -1,17 +1,20 @@
 package docker
 
 import (
+	"archive/tar"
 	"bytes"
 	"context"
 	"encoding/binary"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"fmt"
 	"path"
 
 	"github.com/farseer-go/collections"
+	"github.com/farseer-go/fs/parse"
 	"github.com/farseer-go/utils/exec"
 )
 
@@ -79,30 +82,25 @@ func (receiver container) Inspect(containerId string) (ContainerIdInspectJson, e
 
 // 运行容器(使用Docker CLI客户端)
 func (receiver container) Run(containerId string, networkName string, dockerImage string, args []string, useRm bool, env map[string]string, ctx context.Context) (chan string, func() int) {
-	bf := bytes.Buffer{}
-	bf.WriteString("docker run")
+	// 构建 args
+	dockerArgs := []string{"run"}
+
 	if useRm {
-		bf.WriteString(" --rm")
+		dockerArgs = append(dockerArgs, "--rm")
 	}
 	if containerId != "" {
-		bf.WriteString(" --name ")
-		bf.WriteString(containerId)
+		dockerArgs = append(dockerArgs, "--name", containerId)
 	}
 	if networkName != "" {
-		bf.WriteString(" --network=")
-		bf.WriteString(networkName)
+		dockerArgs = append(dockerArgs, "--network="+networkName)
 	}
-
 	if args != nil {
-		for _, arg := range args {
-			bf.WriteString(" " + arg)
-		}
+		dockerArgs = append(dockerArgs, args...)
 	}
 
-	bf.WriteString(" ")
-	bf.WriteString(dockerImage)
+	dockerArgs = append(dockerArgs, dockerImage)
 
-	return exec.RunShellContext(ctx, bf.String(), env, "", true)
+	return exec.RunShellContext(ctx, "docker", dockerArgs, env, "", true)
 }
 
 // 在容器内部执行cmd命令(使用Docker CLI客户端)
@@ -110,19 +108,16 @@ func (receiver container) Exec(containerId string, execCmd string, env map[strin
 	if env == nil {
 		env = make(map[string]string)
 	}
-	env["BASH_ENV"] = "\"/root/.bashrc\""
+	//env["BASH_ENV"] = "\"/root/.bashrc\""
+	env["BASH_ENV"] = "/root/.bashrc"
 
-	bf := bytes.Buffer{}
-	bf.WriteString("docker exec ") // docker exec FOPS-Build /bin/bash -c "xxxx.sh"
+	// 构建 docker exec 命令 // docker exec FOPS-Build /bin/bash -c "xxxx.sh"
+	args := []string{"exec"}
 	for k, v := range env {
-		bf.WriteString(fmt.Sprintf("-e %s=%s ", k, v))
+		args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))
 	}
-	bf.WriteString(containerId)
-	bf.WriteString(" /bin/bash -c ") //x
-	bf.WriteString("\"")
-	bf.WriteString(execCmd)
-	bf.WriteString("\"")
-	return exec.RunShellContext(ctx, bf.String(), nil, "", false)
+	args = append(args, containerId, "sh", "-c", execCmd)
+	return exec.RunShellContext(ctx, "docker", args, nil, "", false)
 }
 
 // Cp 复制文件到容器内(使用Docker CLI客户端)
@@ -131,14 +126,8 @@ func (receiver container) Cp(containerId string, sourceFile, destFile string, ct
 	wait()
 
 	// docker cp /var/lib/fops/dist/Dockerfile FOPS-Build:/var/lib/fops/dist/Dockerfile
-	bf := bytes.Buffer{}
-	bf.WriteString("docker cp ")
-	bf.WriteString(sourceFile)
-	bf.WriteString(" ")
-	bf.WriteString(containerId)
-	bf.WriteString(":")
-	bf.WriteString(destFile)
-	return exec.RunShellContext(ctx, bf.String(), nil, "", false)
+	args := []string{"cp", sourceFile, containerId + ":" + destFile}
+	return exec.RunShellContext(ctx, "docker", args, nil, "", false)
 }
 
 // Logs 获取日志
@@ -200,7 +189,8 @@ func (receiver container) Logs(containerId string, tailCount int) collections.Li
 // Container 容器信息
 type Container struct {
 	ID      string        `json:"Id"`
-	Names   []string      `json:"Names"`
+	Name    string        // 容器名称 fops-agent
+	Names   []string      `json:"Names"` //"/fops-agent.n1l83l080baf7fqs3frax2fwe.15rau7t52pgjly576wu23279z"
 	Image   string        `json:"Image"`
 	ImageID string        `json:"ImageID"`
 	Command string        `json:"Command"`
@@ -262,6 +252,12 @@ func (receiver container) List(status string, labels map[string]string) (collect
 	}
 
 	containers, err := UnixGetDecode[collections.List[Container]](receiver.unixClient, url)
+	containers.Foreach(func(item *Container) {
+		if len(item.Names) > 0 {
+			item.Name = strings.TrimPrefix(strings.Split(item.Names[0], ".")[0], "/")
+		}
+
+	})
 	return containers, err
 }
 
@@ -302,7 +298,6 @@ func (receiver container) Stats(containerID string) DockerStatsVO {
 
 	// curl --unix-socket /var/run/docker.sock http://localhost/containers/9e76ea4b0231/stats?stream=false
 	url := fmt.Sprintf("http://localhost/containers/%s/stats?stream=false", containerID)
-
 	stats, err := UnixGetDecode[StatsResponse](receiver.unixClient, url)
 	if err != nil {
 		return dockerStatsVO
@@ -349,4 +344,122 @@ func (receiver container) Stats(containerID string) DockerStatsVO {
 	}
 
 	return dockerStatsVO
+}
+
+// GetFileSize 获取容器内文件大小
+func (receiver container) GetFileSize(containerID, filePath string, ctx context.Context) (int64, error) {
+	cmd := fmt.Sprintf("stat -c '%%s' %s", filePath)
+	outputChan, waitFn := receiver.Exec(containerID, cmd, nil, ctx)
+	waitFn()
+	output := collections.NewListFromChan(outputChan)
+
+	if output.Count() > 0 {
+		return parse.ToInt64(strings.TrimSpace(output.First())), nil
+	}
+
+	return 0, nil
+}
+
+// ReadFileFromContainer 使用 docker archive API 从容器读取文件
+func (receiver container) ReadFileFromContainer(containerID, containerPath string, ctx context.Context) ([]byte, error) {
+	resp, err := receiver.unixClient.Get(fmt.Sprintf("http://localhost/containers/%s/archive?path=%s", containerID, containerPath))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return nil, fmt.Errorf("文件不存在: %s", containerPath)
+	}
+
+	if resp.StatusCode >= 400 {
+		errBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("读取文件失败: %s - %s", resp.Status, string(errBody))
+	}
+
+	// 解析 tar 归档
+	tarReader := tar.NewReader(resp.Body)
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("读取tar归档失败: %w", err)
+		}
+
+		if header.Typeflag == tar.TypeDir {
+			continue
+		}
+
+		var buf bytes.Buffer
+		if _, err := io.Copy(&buf, tarReader); err != nil {
+			return nil, fmt.Errorf("读取文件内容失败: %w", err)
+		}
+
+		return buf.Bytes(), nil
+	}
+
+	return nil, fmt.Errorf("tar归档中未找到文件")
+}
+
+// DeleteFile 删除容器内的文件
+func (receiver container) DeleteFile(containerID, filePath string, ctx context.Context) {
+	cmd := fmt.Sprintf("rm -f %s", filePath)
+	_, waitFn := receiver.Exec(containerID, cmd, nil, ctx)
+	waitFn()
+}
+
+// FileExists 检查容器内文件是否存在
+func (receiver container) FileExists(containerID, containerPath string, ctx context.Context) bool {
+	cmd := fmt.Sprintf("test -f %s && echo 'exists' || echo 'not_exists'", containerPath)
+	outputChan, waitFn := receiver.Exec(containerID, cmd, nil, ctx)
+	waitFn()
+	output := collections.NewListFromChan(outputChan)
+
+	return output.Count() > 0 && strings.TrimSpace(output.First()) == "exists"
+}
+
+// FileInfo 文件信息
+type FileInfo struct {
+	Name string // 文件名称
+	Path string // 文件地址
+}
+
+// ListLogFiles 列出容器内的日志文件（排除current.log）
+func (receiver container) ListLogFiles(containerID, basePath string, fileExtension string, limitFileCount int, ctx context.Context) (collections.List[FileInfo], error) {
+	// 使用 find 命令获取所有 .log 文件，排除 current.log
+	// docker exec 6fb10566f4c5 /bin/bash -c "find /var/log/flog/ -name '*.log' -type f ! -name 'current.log' 2>/dev/null"
+	search := "*"
+	if fileExtension != "" {
+		search = "*." + strings.TrimPrefix(fileExtension, ".")
+	}
+
+	cmd := fmt.Sprintf("find %s -name '%s' -type f 2>/dev/null", basePath, search)
+	// 文件限制
+	if limitFileCount > 0 {
+		cmd += fmt.Sprintf(" | head -n %d", limitFileCount)
+	}
+
+	output, wait := receiver.Exec(containerID, cmd, nil, ctx)
+	wait()
+	lstFile := collections.NewListFromChan(output)
+
+	// /var/log/flog/fops/2026-03-06-12_977.log
+	// /var/log/flog/fops/2026-03-06-12_978.log
+	files := collections.NewList[FileInfo]()
+	lstFile.Foreach(func(item *string) {
+		filePath := *item
+		filePath = strings.TrimSpace(filePath)
+		if filePath == "" {
+			return
+		}
+
+		files.Add(FileInfo{
+			Name: filepath.Base(filePath),
+			Path: filePath,
+		})
+	})
+
+	return files, nil
 }

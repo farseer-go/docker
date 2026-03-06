@@ -40,7 +40,8 @@ type EventResult struct {
 // Watch 持续获取docker事件(使用Docker CLI客户端)
 func (receiver event) Watch() chan EventResult {
 	eventResultChan := make(chan EventResult, 1000)
-	progress, wait := exec.RunShell("docker events --format '{{json .}}'", nil, "", false)
+	//progress, wait := exec.RunShell("docker events --format '{{json .}}'", nil, "", false)
+	progress, wait := exec.RunShell("docker", []string{"events", "--format", "{{json .}}"}, nil, "", false)
 
 	// 将读取到的json事件信息转换成EventResult结构体
 	worker := async.New()
@@ -53,8 +54,6 @@ func (receiver event) Watch() chan EventResult {
 	})
 
 	defer worker.Wait()
-
 	wait()
-
 	return eventResultChan
 }
