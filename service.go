@@ -61,7 +61,7 @@ func (receiver service) Delete(serviceName string) error {
 }
 
 // SetImagesAndReplicas 更新镜像版本和副本数量
-func (receiver service) SetImagesAndReplicas(serviceName string, dockerImages string, dockerReplicas int) (chan string, func() int) {
+func (receiver service) SetImagesAndReplicas(serviceName string, dockerImages string, dockerReplicas int) exec.ShellWait {
 	args := []string{
 		"service", "update",
 		"--image", dockerImages,
@@ -74,7 +74,7 @@ func (receiver service) SetImagesAndReplicas(serviceName string, dockerImages st
 }
 
 // SetImages 更新镜像版本
-func (receiver service) SetImages(serviceName string, dockerImages string, updateDelay int) (chan string, func() int) {
+func (receiver service) SetImages(serviceName string, dockerImages string, updateDelay int) exec.ShellWait {
 	args := []string{
 		"service", "update",
 		"--image", dockerImages,
@@ -93,7 +93,7 @@ func (receiver service) SetImages(serviceName string, dockerImages string, updat
 }
 
 // SetReplicas 更新副本数量
-func (receiver service) SetReplicas(serviceName string, dockerReplicas int) (chan string, func() int) {
+func (receiver service) SetReplicas(serviceName string, dockerReplicas int) exec.ShellWait {
 	args := []string{
 		"service", "update",
 		"--replicas", fmt.Sprintf("%d", dockerReplicas),
@@ -104,7 +104,7 @@ func (receiver service) SetReplicas(serviceName string, dockerReplicas int) (cha
 }
 
 // Restart 重启容器
-func (receiver service) Restart(serviceName string) (chan string, func() int) {
+func (receiver service) Restart(serviceName string) exec.ShellWait {
 	args := []string{
 		"service", "update",
 		"--with-registry-auth",
@@ -115,7 +115,7 @@ func (receiver service) Restart(serviceName string) (chan string, func() int) {
 }
 
 // Create 创建服务
-func (receiver service) Create(serviceName, dockerNodeRole, additionalScripts, dockerNetwork string, dockerReplicas int, dockerImages string, limitCpus float64, limitMemory string) (chan string, func() int) {
+func (receiver service) Create(serviceName, dockerNodeRole, additionalScripts, dockerNetwork string, dockerReplicas int, dockerImages string, limitCpus float64, limitMemory string) exec.ShellWait {
 	args := []string{
 		"service", "create",
 		"--with-registry-auth",
@@ -162,7 +162,8 @@ func (receiver service) Logs(serviceIdOrServiceName string, tailCount int) (coll
 		"--tail", fmt.Sprintf("%d", tailCount),
 	}
 
-	lstLog, exitCode := exec.RunShellCommand("docker", args, nil, "", true)
+	wait := exec.RunShell("docker", args, nil, "", true)
+	lstLog, exitCode := wait.WaitToList()
 
 	lst := collections.NewList[ServiceLogVO]()
 	if exitCode != 0 {

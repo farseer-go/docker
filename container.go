@@ -82,7 +82,7 @@ func (receiver container) Inspect(containerId string) (ContainerIdInspectJson, e
 }
 
 // 运行容器(使用Docker CLI客户端)
-func (receiver container) Run(containerId string, networkName string, dockerImage string, args []string, useRm bool, env map[string]string, ctx context.Context) (chan string, func() int) {
+func (receiver container) Run(containerId string, networkName string, dockerImage string, args []string, useRm bool, env map[string]string, ctx context.Context) exec.ShellWait {
 	// 构建 args
 	dockerArgs := []string{"run"}
 
@@ -105,7 +105,7 @@ func (receiver container) Run(containerId string, networkName string, dockerImag
 }
 
 // 在容器内部执行cmd命令(使用Docker CLI客户端)
-func (receiver container) Exec(containerId string, execCmd string, env map[string]string, ctx context.Context) (chan string, func() int) {
+func (receiver container) Exec(containerId string, execCmd string, env map[string]string, ctx context.Context) exec.ShellWait {
 	if env == nil {
 		env = make(map[string]string)
 	}
@@ -122,9 +122,9 @@ func (receiver container) Exec(containerId string, execCmd string, env map[strin
 }
 
 // Cp 复制文件到容器内(使用Docker CLI客户端)
-func (receiver container) Cp(containerId string, sourceFile, destFile string, ctx context.Context) (chan string, func() int) {
-	_, wait := receiver.Exec(containerId, "mkdir -p "+path.Dir(destFile), nil, ctx)
-	wait()
+func (receiver container) Cp(containerId string, sourceFile, destFile string, ctx context.Context) exec.ShellWait {
+	wait := receiver.Exec(containerId, "mkdir -p "+path.Dir(destFile), nil, ctx)
+	wait.Wait()
 
 	// docker cp /var/lib/fops/dist/Dockerfile FOPS-Build:/var/lib/fops/dist/Dockerfile
 	args := []string{"cp", sourceFile, containerId + ":" + destFile}
@@ -350,9 +350,8 @@ func (receiver container) Stats(containerID string) DockerStatsVO {
 // GetFileSize 获取容器内文件大小
 func (receiver container) GetFileSize(containerID, filePath string, ctx context.Context) (int64, error) {
 	cmd := fmt.Sprintf("stat -c '%%s' %s", filePath)
-	outputChan, waitFn := receiver.Exec(containerID, cmd, nil, ctx)
-	waitFn()
-	output := collections.NewListFromChan(outputChan)
+	wait := receiver.Exec(containerID, cmd, nil, ctx)
+	output, _ := wait.WaitToList()
 
 	if output.Count() > 0 {
 		return parse.ToInt64(strings.TrimSpace(output.First())), nil
@@ -405,31 +404,28 @@ func (receiver container) ReadFileFromContainer(containerID, filePath string, ct
 }
 
 // ReadFileFromContainerByOffset 从容器读取文件内容（从指定偏移量开始）
-func (receiver container) ReadFileFromContainerByOffset(containerID, filePath string, offset int64, ctx context.Context) []byte {
+func (receiver container) ReadFileFromContainerByOffset(containerID, filePath string, offset int64, ctx context.Context) collections.List[string] {
 	// 使用 tail 命令从指定位置读取
 	// tail -c +N 表示从第 N 字节开始读取
-	cmd := fmt.Sprintf("tail -c +%d %s 2>/dev/null", offset+1, filePath)
-	// docker exec 6fb10566f4c5 sh -c "tail -c +1 /var/log/flog/fops/current.log 2>/dev/null"
-	output, wait := receiver.Exec(containerID, cmd, nil, ctx)
-	wait()
-	lines := collections.NewListFromChan(output)
-
-	return []byte(lines.First())
+	cmd := fmt.Sprintf("tail -n +%d %s 2>/dev/null", offset+1, filePath)
+	// docker exec 990870bf457b sh -c "tail -n +1 /var/log/flog/fops/2026-03-07-21_1.log 2>/dev/null"
+	wait := receiver.Exec(containerID, cmd, nil, ctx)
+	lines, _ := wait.WaitToList()
+	return lines
 }
 
 // DeleteFile 删除容器内的文件
 func (receiver container) DeleteFile(containerID, filePath string, ctx context.Context) {
 	cmd := fmt.Sprintf("rm -f %s", filePath)
-	_, waitFn := receiver.Exec(containerID, cmd, nil, ctx)
-	waitFn()
+	wait := receiver.Exec(containerID, cmd, nil, ctx)
+	wait.Wait()
 }
 
 // FileExists 检查容器内文件是否存在
 func (receiver container) FileExists(containerID, filePath string, ctx context.Context) bool {
 	cmd := fmt.Sprintf("test -f %s && echo 'exists' || echo 'not_exists'", filePath)
-	outputChan, waitFn := receiver.Exec(containerID, cmd, nil, ctx)
-	waitFn()
-	output := collections.NewListFromChan(outputChan)
+	wait := receiver.Exec(containerID, cmd, nil, ctx)
+	output, _ := wait.WaitToList()
 
 	return output.Count() > 0 && strings.TrimSpace(output.First()) == "exists"
 }
@@ -454,9 +450,8 @@ func (receiver container) ListLogFiles(containerID, dirPath string, fileExtensio
 		cmd = fmt.Sprintf("find %s -name '*.%s' -type f -exec stat -c '%%Y %%s %%n' {} \\; 2>/dev/null", dirPath, fileExtension)
 	}
 
-	output, wait := receiver.Exec(containerID, cmd, nil, ctx)
-	wait()
-	lines := collections.NewListFromChan(output)
+	wait := receiver.Exec(containerID, cmd, nil, ctx)
+	lines, _ := wait.WaitToList()
 
 	files := collections.NewList[FileInfo]()
 	lines.Foreach(func(item *string) {

@@ -83,7 +83,7 @@ func UnixDelete(unixClient *http.Client, url string) (*http.Response, error) {
 	defer resp.Body.Close()
 
 	// 204 No Content 表示成功
-	if resp.StatusCode == http.StatusNoContent {
+	if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusOK {
 		return resp, nil
 	}
 

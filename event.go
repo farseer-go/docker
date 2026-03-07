@@ -3,7 +3,6 @@ package docker
 import (
 	"net/http"
 
-	"github.com/farseer-go/fs/async"
 	"github.com/farseer-go/fs/snc"
 	"github.com/farseer-go/utils/exec"
 )
@@ -41,19 +40,11 @@ type EventResult struct {
 func (receiver event) Watch() chan EventResult {
 	eventResultChan := make(chan EventResult, 1000)
 	//progress, wait := exec.RunShell("docker events --format '{{json .}}'", nil, "", false)
-	progress, wait := exec.RunShell("docker", []string{"events", "--format", "{{json .}}"}, nil, "", false)
-
-	// 将读取到的json事件信息转换成EventResult结构体
-	worker := async.New()
-	worker.Add(func() {
-		for json := range progress {
-			var eventResult EventResult
-			snc.Unmarshal([]byte(json), &eventResult)
-			eventResultChan <- eventResult
-		}
+	wait := exec.RunShell("docker", []string{"events", "--format", "{{json .}}"}, nil, "", false)
+	go wait.WaitToFunc(func(json string) {
+		var eventResult EventResult
+		snc.Unmarshal([]byte(json), &eventResult)
+		eventResultChan <- eventResult
 	})
-
-	defer worker.Wait()
-	wait()
 	return eventResultChan
 }
