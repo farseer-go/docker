@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"fmt"
 	"path"
@@ -361,15 +362,15 @@ func (receiver container) GetFileSize(containerID, filePath string, ctx context.
 }
 
 // ReadFileFromContainer 使用 docker archive API 从容器读取文件
-func (receiver container) ReadFileFromContainer(containerID, containerPath string, ctx context.Context) ([]byte, error) {
-	resp, err := receiver.unixClient.Get(fmt.Sprintf("http://localhost/containers/%s/archive?path=%s", containerID, containerPath))
+func (receiver container) ReadFileFromContainer(containerID, filePath string, ctx context.Context) ([]byte, error) {
+	resp, err := receiver.unixClient.Get(fmt.Sprintf("http://localhost/containers/%s/archive?path=%s", containerID, filePath))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		return nil, fmt.Errorf("文件不存在: %s", containerPath)
+		return nil, fmt.Errorf("文件不存在: %s", filePath)
 	}
 
 	if resp.StatusCode >= 400 {
@@ -403,6 +404,19 @@ func (receiver container) ReadFileFromContainer(containerID, containerPath strin
 	return nil, fmt.Errorf("tar归档中未找到文件")
 }
 
+// ReadFileFromContainerByOffset 从容器读取文件内容（从指定偏移量开始）
+func (receiver container) ReadFileFromContainerByOffset(containerID, filePath string, offset int64, ctx context.Context) []byte {
+	// 使用 tail 命令从指定位置读取
+	// tail -c +N 表示从第 N 字节开始读取
+	cmd := fmt.Sprintf("tail -c +%d %s 2>/dev/null", offset+1, filePath)
+	// docker exec 6fb10566f4c5 sh -c "tail -c +1 /var/log/flog/fops/current.log 2>/dev/null"
+	output, wait := receiver.Exec(containerID, cmd, nil, ctx)
+	wait()
+	lines := collections.NewListFromChan(output)
+
+	return []byte(lines.First())
+}
+
 // DeleteFile 删除容器内的文件
 func (receiver container) DeleteFile(containerID, filePath string, ctx context.Context) {
 	cmd := fmt.Sprintf("rm -f %s", filePath)
@@ -411,8 +425,8 @@ func (receiver container) DeleteFile(containerID, filePath string, ctx context.C
 }
 
 // FileExists 检查容器内文件是否存在
-func (receiver container) FileExists(containerID, containerPath string, ctx context.Context) bool {
-	cmd := fmt.Sprintf("test -f %s && echo 'exists' || echo 'not_exists'", containerPath)
+func (receiver container) FileExists(containerID, filePath string, ctx context.Context) bool {
+	cmd := fmt.Sprintf("test -f %s && echo 'exists' || echo 'not_exists'", filePath)
 	outputChan, waitFn := receiver.Exec(containerID, cmd, nil, ctx)
 	waitFn()
 	output := collections.NewListFromChan(outputChan)
@@ -422,42 +436,55 @@ func (receiver container) FileExists(containerID, containerPath string, ctx cont
 
 // FileInfo 文件信息
 type FileInfo struct {
-	Name string // 文件名称
-	Path string // 文件地址
+	Name    string    // 文件名称
+	Path    string    // 文件地址
+	Size    int64     // 文件大小
+	ModTime time.Time //
 }
 
-// ListLogFiles 列出容器内的日志文件（排除current.log）
-func (receiver container) ListLogFiles(containerID, basePath string, fileExtension string, limitFileCount int, ctx context.Context) (collections.List[FileInfo], error) {
-	// 使用 find 命令获取所有 .log 文件，排除 current.log
-	// docker exec 6fb10566f4c5 /bin/bash -c "find /var/log/flog/ -name '*.log' -type f ! -name 'current.log' 2>/dev/null"
-	search := "*"
-	if fileExtension != "" {
-		search = "*." + strings.TrimPrefix(fileExtension, ".")
-	}
-
-	cmd := fmt.Sprintf("find %s -name '%s' -type f 2>/dev/null", basePath, search)
-	// 文件限制
+// ListLogFiles 列出容器内的日志文件
+func (receiver container) ListLogFiles(containerID, dirPath string, fileExtension string, limitFileCount int, ctx context.Context) (collections.List[FileInfo], error) {
+	// 使用 find + stat 获取文件列表，包含修改时间和大小
+	// 格式: 修改时间(时间戳) 大小(字节) 文件路径
+	var cmd string
+	// docker exec 6fb10566f4c5 sh -c "find /var/log/flog -name '*.log' -type f -exec stat -c '%Y %s %n' {} \; 2>/dev/null | head -n 100"
 	if limitFileCount > 0 {
-		cmd += fmt.Sprintf(" | head -n %d", limitFileCount)
+		cmd = fmt.Sprintf("find %s -name '*.%s' -type f -exec stat -c '%%Y %%s %%n' {} \\; 2>/dev/null | head -n %d", dirPath, fileExtension, limitFileCount)
+	} else {
+		cmd = fmt.Sprintf("find %s -name '*.%s' -type f -exec stat -c '%%Y %%s %%n' {} \\; 2>/dev/null", dirPath, fileExtension)
 	}
 
 	output, wait := receiver.Exec(containerID, cmd, nil, ctx)
 	wait()
-	lstFile := collections.NewListFromChan(output)
+	lines := collections.NewListFromChan(output)
 
-	// /var/log/flog/fops/2026-03-06-12_977.log
-	// /var/log/flog/fops/2026-03-06-12_978.log
 	files := collections.NewList[FileInfo]()
-	lstFile.Foreach(func(item *string) {
-		filePath := *item
-		filePath = strings.TrimSpace(filePath)
+	lines.Foreach(func(item *string) {
+		line := strings.TrimSpace(*item)
+		if line == "" {
+			return
+		}
+
+		// 解析格式: 修改时间 大小 文件路径
+		parts := strings.SplitN(line, " ", 3)
+		if len(parts) != 3 {
+			return
+		}
+
+		var modTimeInt, size int64
+		fmt.Sscanf(parts[0], "%d", &modTimeInt)
+		fmt.Sscanf(parts[1], "%d", &size)
+		filePath := strings.TrimSpace(parts[2])
+
 		if filePath == "" {
 			return
 		}
 
 		files.Add(FileInfo{
-			Name: filepath.Base(filePath),
-			Path: filePath,
+			Name:    filepath.Base(filePath),
+			Path:    filePath,
+			ModTime: time.Unix(modTimeInt, 0),
+			Size:    size,
 		})
 	})
 
