@@ -109,10 +109,8 @@ func (receiver container) Exec(containerId string, execCmd string, env map[strin
 	if env == nil {
 		env = make(map[string]string)
 	}
-	//env["BASH_ENV"] = "\"/root/.bashrc\""
-	env["BASH_ENV"] = "/root/.bashrc"
-
-	// 构建 docker exec 命令 // docker exec FOPS-Build /bin/bash -c "xxxx.sh"
+	//env["BASH_ENV"] = "/root/.bashrc" // bash才生效
+	// 构建 docker exec 命令 // docker exec FOPS-Build sh -c "xxx.sh"
 	args := []string{"exec"}
 	for k, v := range env {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))
