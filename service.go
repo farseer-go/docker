@@ -146,12 +146,53 @@ func (receiver service) Create(serviceName, dockerNodeRole, additionalScripts, d
 
 	// 额外参数
 	if additionalScripts != "" {
-		args = append(args, strings.Fields(additionalScripts)...)
+		args = append(args, ParseShellArgs(additionalScripts)...)
 	}
 
 	args = append(args, dockerImages)
 
 	return exec.RunShell("docker", args, nil, "", true)
+}
+
+// ParseShellArgs 解析 shell 风格的参数字符串（支持引号和续行符）
+func ParseShellArgs(s string) []string {
+	// 处理续行符：\ + 换行符 -> 空格
+	s = strings.ReplaceAll(s, "\\\n", " ")
+	s = strings.ReplaceAll(s, "\\\r\n", " ")
+	// 清理多余空白
+	s = strings.TrimSpace(s)
+
+	var args []string
+	var current strings.Builder
+	var inQuote bool
+	var quoteChar rune
+
+	for _, ch := range s {
+		switch {
+		case ch == '"' || ch == '\'':
+			if inQuote {
+				if ch == quoteChar {
+					inQuote = false
+				} else {
+					current.WriteRune(ch)
+				}
+			} else {
+				inQuote = true
+				quoteChar = ch
+			}
+		case (ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t') && !inQuote:
+			if current.Len() > 0 {
+				args = append(args, current.String())
+				current.Reset()
+			}
+		default:
+			current.WriteRune(ch)
+		}
+	}
+	if current.Len() > 0 {
+		args = append(args, current.String())
+	}
+	return args
 }
 
 // Logs 获取日志
