@@ -401,76 +401,15 @@ func (receiver container) ReadFileFromContainer(containerID, filePath string, ct
 	return nil, fmt.Errorf("tar归档中未找到文件")
 }
 
-// // ReadFileFromContainerByOffset 从容器读取文件内容（从指定偏移量开始）
-// func (receiver container) ReadFileFromContainerByOffset(containerID, filePath string, offset int64, ctx context.Context) collections.List[string] {
-// 	// 使用 tail 命令从指定位置读取
-// 	// tail -c +N 表示从第 N 字节开始读取
-// 	cmd := fmt.Sprintf("tail -n +%d %s 2>/dev/null", offset+1, filePath)
-// 	// docker exec 990870bf457b sh -c "tail -n +1 /var/log/flog/fops/2026-03-07-21_1.log 2>/dev/null"
-// 	wait := receiver.Exec(containerID, cmd, nil, ctx)
-// 	lines, _ := wait.WaitToList()
-// 	return lines
-// }
-
 // ReadFileFromContainerByOffset 从容器读取文件内容（从指定偏移量开始）
-// 使用 Docker Archive API 替代 docker exec，避免进程创建开销
 func (receiver container) ReadFileFromContainerByOffset(containerID, filePath string, offset int64, ctx context.Context) collections.List[string] {
-	// 使用 Docker Archive API 获取文件
-	// docker archive API: /containers/{id}/archive?path={path}
-	url := fmt.Sprintf("http://localhost/containers/%s/archive?path=%s", containerID, filePath)
-
-	resp, err := receiver.unixClient.Get(url)
-	if err != nil {
-		return collections.NewList[string]()
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return collections.NewList[string]()
-	}
-
-	// 解析 tar 归档
-	tarReader := tar.NewReader(resp.Body)
-	for {
-		header, err := tarReader.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return collections.NewList[string]()
-		}
-
-		if header.Typeflag == tar.TypeDir {
-			continue
-		}
-
-		// 跳过偏移量
-		if offset > 0 {
-			if _, err := io.CopyN(io.Discard, tarReader, offset); err != nil {
-				return collections.NewList[string]()
-			}
-		}
-
-		// 读取剩余内容
-		var buf bytes.Buffer
-		if _, err := io.Copy(&buf, tarReader); err != nil {
-			return collections.NewList[string]()
-		}
-
-		// 按行分割
-		lines := strings.Split(buf.String(), "\n")
-		result := collections.NewList[string]()
-		for _, line := range lines {
-			line = strings.TrimRight(line, "\r")
-			if line != "" {
-				result.Add(line)
-			}
-		}
-
-		return result
-	}
-
-	return collections.NewList[string]()
+	// 使用 tail 命令从指定位置读取
+	// tail -c +N 表示从第 N 字节开始读取
+	cmd := fmt.Sprintf("tail -n +%d %s 2>/dev/null", offset+1, filePath)
+	// docker exec 990870bf457b sh -c "tail -n +1 /var/log/flog/fops/2026-03-07-21_1.log 2>/dev/null"
+	wait := receiver.Exec(containerID, cmd, nil, ctx)
+	lines, _ := wait.WaitToList()
+	return lines
 }
 
 // DeleteFile 删除容器内的文件
