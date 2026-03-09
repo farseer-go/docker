@@ -401,10 +401,10 @@ func (receiver container) ReadFileFromContainer(containerID, filePath string, ct
 	return nil, fmt.Errorf("tar归档中未找到文件")
 }
 
-// ReadFileFromContainerByOffset 从容器读取文件内容（从指定偏移量开始）
+// ReadFileFromContainerByOffset 从容器读取文件内容（从指定行数开始）
 func (receiver container) ReadFileFromContainerByOffset(containerID, filePath string, offset int64, ctx context.Context) collections.List[string] {
 	// 使用 tail 命令从指定位置读取
-	// tail -c +N 表示从第 N 字节开始读取
+	// tail -c +N 表示从第 N 行开始读取
 	cmd := fmt.Sprintf("tail -n +%d %s 2>/dev/null", offset+1, filePath)
 	// docker exec 990870bf457b sh -c "tail -n +1 /var/log/flog/fops/2026-03-07-21_1.log 2>/dev/null"
 	wait := receiver.Exec(containerID, cmd, nil, ctx)
