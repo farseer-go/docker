@@ -63,24 +63,6 @@ func (receiver container) Restart(containerId string) error {
 	return err
 }
 
-// Inspect 查看容器详情
-func (receiver container) Inspect(containerId string) (ContainerIdInspectJson, error) {
-	// curl --unix-socket /var/run/docker.sock http://localhost/containers/kb44fvovlg1o/json
-	url := fmt.Sprintf("http://localhost/containers/%s/json", containerId)
-
-	// 1. 使用工具函数直接请求并解析
-	// 注意：您的工具函数忽略了 HTTP 错误码和 JSON 解析错误，这里直接使用
-	result, _ := UnixGetDecode[ContainerIdInspectJson](receiver.unixClient, url)
-
-	// 2. 通过判断 ID 是否为空来确定容器是否存在
-	// Docker 404 错误返回的是 {"message": "..."}，解析后 ID 字段为空
-	if result.ID == "" {
-		return result, nil
-	}
-
-	return result, nil
-}
-
 // 运行容器(使用Docker CLI客户端)
 func (receiver container) Run(containerId string, networkName string, dockerImage string, args []string, useRm bool, env map[string]string, ctx context.Context) exec.ShellWait {
 	// 构建 args
@@ -240,6 +222,7 @@ type Container struct {
 		Name        string `json:"Name,omitempty"`
 		Driver      string `json:"Driver,omitempty"`
 	} `json:"Mounts"`
+	Pid int // 需要通过Inspect(c.ID)手动获取
 }
 
 // List 获取容器列表
@@ -258,6 +241,24 @@ func (receiver container) List(status string, labels map[string]string) (collect
 
 	})
 	return containers, err
+}
+
+// Inspect 查看容器详情
+func (receiver container) Inspect(containerId string) (ContainerIdInspectJson, error) {
+	// curl --unix-socket /var/run/docker.sock http://localhost/containers/kb44fvovlg1o/json
+	url := fmt.Sprintf("http://localhost/containers/%s/json", containerId)
+
+	// 1. 使用工具函数直接请求并解析
+	// 注意：您的工具函数忽略了 HTTP 错误码和 JSON 解析错误，这里直接使用
+	result, _ := UnixGetDecode[ContainerIdInspectJson](receiver.unixClient, url)
+
+	// 2. 通过判断 ID 是否为空来确定容器是否存在
+	// Docker 404 错误返回的是 {"message": "..."}，解析后 ID 字段为空
+	if result.ID == "" {
+		return result, nil
+	}
+
+	return result, nil
 }
 
 // 解析响应

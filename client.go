@@ -57,10 +57,10 @@ func (receiver Client) GetVersion() string {
 }
 
 // Stats 获取所有容器的资源使用
-func (receiver Client) Stats() collections.List[DockerStatsVO] {
+func (receiver Client) Stats(containers collections.List[Container]) collections.List[DockerStatsVO] {
 	lstDockerInstance := collections.NewList[DockerStatsVO]()
 	// 获取所有容器列表
-	containers, _ := receiver.Container.List("", nil)
+	//containers, _ := receiver.Container.List("", nil)
 	containers.Parallel(10, func(item *Container) {
 		dockerStatsVO := receiver.Container.Stats(item.ID)
 		lstDockerInstance.Add(dockerStatsVO)
