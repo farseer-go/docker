@@ -46,7 +46,7 @@ func NewClient() *Client {
 }
 
 // GetVersion 获取系统Docker版本
-func (receiver Client) GetVersion() string {
+func (receiver *Client) GetVersion() string {
 	// curl --unix-socket /var/run/docker.sock http://localhost/version
 	type VersionResponse struct {
 		Version    string `json:"Version"`    // Docker 版本
@@ -57,12 +57,11 @@ func (receiver Client) GetVersion() string {
 }
 
 // Stats 获取所有容器的资源使用
-func (receiver Client) Stats(containers collections.List[Container]) collections.List[DockerStatsVO] {
+func (receiver *Client) Stats(containers collections.List[string]) collections.List[DockerStatsVO] {
 	lstDockerInstance := collections.NewList[DockerStatsVO]()
 	// 获取所有容器列表
-	//containers, _ := receiver.Container.List("", nil)
-	containers.Parallel(10, func(item *Container) {
-		dockerStatsVO := receiver.Container.Stats(item.ID)
+	containers.Parallel(10, func(cID *string) {
+		dockerStatsVO := receiver.Container.Stats(*cID)
 		lstDockerInstance.Add(dockerStatsVO)
 	})
 	return lstDockerInstance
@@ -105,7 +104,7 @@ type DockerInfo struct {
 	Labels map[string]string `json:"Labels"` // Docker节点标签
 }
 
-func (receiver Client) GetInfo() DockerInfo {
+func (receiver *Client) GetInfo() DockerInfo {
 	// curl --unix-socket /var/run/docker.sock http://localhost/info
 	apiData, _ := UnixGetDecode[DockerInfo](receiver.unixClient, "http://localhost/info")
 	return apiData
