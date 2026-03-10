@@ -19,6 +19,7 @@ type Client struct {
 	Event      event
 	unixClient *http.Client
 	Task       task
+	Config     config
 }
 
 // NewClient 实例化一个Client
@@ -41,6 +42,7 @@ func NewClient() *Client {
 		Images:     images{unixClient: unixClient},
 		Event:      event{unixClient: unixClient},
 		Task:       task{unixClient: unixClient},
+		Config:     config{unixClient: unixClient},
 	}
 	return client
 }

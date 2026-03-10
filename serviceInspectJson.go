@@ -79,7 +79,8 @@ type ServiceInspectJson struct {
 				StopGracePeriod int64 `json:"StopGracePeriod"`
 				DNSConfig       struct {
 				} `json:"DNSConfig"`
-				Isolation string `json:"Isolation"`
+				Isolation string              `json:"Isolation"`
+				Configs   []ServiceConfigJson `json:"Configs,omitempty"`
 			} `json:"ContainerSpec"`
 			Resources struct {
 				Limits struct {
@@ -513,4 +514,17 @@ type ContainerIdInspectJson struct {
 			} `json:"net"`
 		} `json:"Networks"`
 	} `json:"NetworkSettings"`
+}
+
+type ServiceConfigJson struct {
+	ConfigID   string                `json:"ConfigID"`
+	ConfigName string                `json:"ConfigName"`
+	File       ServiceConfigFileJson `json:"File"`
+}
+
+type ServiceConfigFileJson struct {
+	Name string `json:"Name"` // 挂载到容器内的路径
+	UID  string `json:"UID"`
+	GID  string `json:"GID"`
+	Mode int    `json:"Mode"`
 }

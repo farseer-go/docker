@@ -289,8 +289,7 @@ type StatsResponse struct {
 	} `json:"memory_stats"`
 }
 
-// getContainerStats 获取单个容器的统计信息
-// names 参数是容器的名称列表，通常来自 List 方法的结果。Docker Swarm 模式下，容器名称格式为 /服务名.序号.任务ID
+// Stats 获取单个容器的统计信息
 func (receiver container) Stats(containerID string) DockerStatsVO {
 	dockerStatsVO := DockerStatsVO{
 		ContainerID: containerID[:12],

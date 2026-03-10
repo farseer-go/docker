@@ -1,6 +1,8 @@
 package docker
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
@@ -428,4 +430,30 @@ func formatStateInfo(timestamp time.Time, state string) string {
 	} else {
 		return fmt.Sprintf("%s %d hours ago", state, int(duration.Hours()))
 	}
+}
+
+// UpdateServiceConfig 更新服务的配置关联 (会触发滚动重启)
+func (receiver service) UpdateServiceConfig(serviceName string, newConfigID string, targetPath string) error {
+	// 1. 先 Inspect 拿到当前的完整信息和版本号 (Version)
+	current, err := receiver.Inspect(serviceName)
+	if err != nil {
+		return err
+	}
+
+	// 2. 修改 Spec 中的 Configs 数组
+	// 注意：这里简单演示替换第一个配置，实际建议根据 targetPath 匹配替换
+	current.Spec.TaskTemplate.ContainerSpec.Configs = []ServiceConfigJson{{
+		ConfigID: newConfigID,
+		File: ServiceConfigFileJson{
+			Name: targetPath, UID: "0", GID: "0", Mode: 0444,
+		},
+	}}
+
+	// 3. 发送更新请求
+	// 必须包含 version 参数（乐观锁检查）
+	url := fmt.Sprintf("http://localhost/services/%s/update?version=%d", serviceName, current.Version.Index)
+	body, _ := json.Marshal(current.Spec)
+	resp, err := receiver.unixClient.Post(url, "application/json", bytes.NewBuffer(body))
+	resp.Body.Close()
+	return nil
 }
