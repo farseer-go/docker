@@ -117,7 +117,7 @@ func (receiver service) Restart(serviceName string) exec.ShellWait {
 }
 
 // Create 创建服务
-func (receiver service) Create(serviceName, dockerNodeRole, additionalScripts, dockerNetwork string, dockerReplicas int, dockerImages string, limitCpus float64, limitMemory string) exec.ShellWait {
+func (receiver service) Create(serviceName, dockerNodeRole, additionalScripts, dockerNetwork string, dockerReplicas int, dockerImages string, limitCpus float64, limitMemory string, configName ...string) exec.ShellWait {
 	args := []string{
 		"service", "create",
 		"--with-registry-auth",
@@ -126,6 +126,11 @@ func (receiver service) Create(serviceName, dockerNodeRole, additionalScripts, d
 		"-d",
 		"--network=" + dockerNetwork,
 		"--update-order", "start-first",
+	}
+
+	// 挂载 Docker Config（如果提供）
+	if len(configName) > 0 && configName[0] != "" {
+		args = append(args, "--config", fmt.Sprintf("source=%s,target=/app/config.yaml", configName[0]))
 	}
 
 	// 节点筛选
