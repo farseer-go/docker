@@ -86,5 +86,21 @@ func (receiver config) InspectByService(serviceName string) (ConfigInfo, error) 
 	url := fmt.Sprintf("http://localhost/configs?filters=%s", url.QueryEscape(filter))
 
 	configs, err := UnixGetDecode[collections.List[ConfigInfo]](receiver.unixClient, url)
-	return configs.First(), err
+	result := configs.First()
+	if err != nil {
+		return result, err
+	}
+
+	// 3. 校验是否存在
+	if result.ID == "" {
+		return result, errors.New("no such config")
+	}
+	// 3. 将 Base64 的 Data 解码为明文 string
+	decodedByte, err := base64.StdEncoding.DecodeString(result.Spec.Data)
+	if err != nil {
+		return result, fmt.Errorf("decode base64 failed: %v", err)
+	}
+
+	result.Spec.Data = string(decodedByte)
+	return result, nil
 }
