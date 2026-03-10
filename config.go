@@ -22,11 +22,8 @@ type ConfigCreateRequest struct {
 }
 
 type ConfigInfo struct {
-	ID   string `json:"ID"`
-	Spec struct {
-		Name   string            `json:"Name"`
-		Labels map[string]string `json:"Labels"`
-	} `json:"Spec"`
+	ID   string              `json:"ID"`
+	Spec ConfigCreateRequest `json:"Spec"`
 }
 
 // CreateConfig 创建一个新的 Docker Config
@@ -70,12 +67,20 @@ func (receiver config) Inspect(configIdOrName string) (ConfigInfo, error) {
 	if result.ID == "" {
 		return result, errors.New("no such config")
 	}
+	// 3. 将 Base64 的 Data 解码为明文 string
+	decodedByte, err := base64.StdEncoding.DecodeString(result.Spec.Data)
+	if err != nil {
+		return result, fmt.Errorf("decode base64 failed: %v", err)
+	}
 
+	result.Spec.Data = string(decodedByte)
 	return result, nil
 }
 
-// ListConfigsByService 根据 Label 查找关联的所有配置
-func (receiver config) ListConfigsByService(serviceName string) (ConfigInfo, error) {
+// InspectByService 根据 Label 查找关联的所有配置
+func (receiver config) InspectByService(serviceName string) (ConfigInfo, error) {
+	// curl --unix-socket /var/run/docker.sock http://localhost/configs
+
 	// 使用 filter 过滤 Label
 	filter := fmt.Sprintf(`{"label": ["owner_service=%s"]}`, serviceName)
 	url := fmt.Sprintf("http://localhost/configs?filters=%s", url.QueryEscape(filter))
