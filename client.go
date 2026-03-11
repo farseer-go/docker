@@ -111,3 +111,35 @@ func (receiver *Client) GetInfo() DockerInfo {
 	apiData, _ := UnixGetDecode[DockerInfo](receiver.unixClient, "http://localhost/info")
 	return apiData
 }
+
+// SyncConfig 检查并更新服务的配置版本
+// 返回值：是否更新了配置
+func (receiver *Client) SyncConfig(appName string, targetConfigPath string) bool {
+	appVer, err := receiver.Service.GetCurConfigVersion(appName)
+	if err != nil {
+		return false
+	}
+	// 说明服务没有使用配置
+	if appVer == 0 {
+		return false
+	}
+
+	// 获取服务当前使用的配置
+	configVersion, err := receiver.Config.GetLastVersion(appName)
+	if err != nil {
+		return false
+	}
+
+	// 没有读取到配置文件,则退出
+	if configVersion.Version == 0 {
+		return false
+	}
+
+	// 如果版本不一致，更新配置
+	if configVersion.Version != appVer {
+		isUpdate, _ := receiver.Service.UpdateServiceConfig(appName, configVersion.ID, configVersion.Spec.Name, targetConfigPath)
+		return isUpdate
+	}
+
+	return false
+}

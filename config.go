@@ -10,6 +10,7 @@ import (
 	"net/url"
 
 	"github.com/farseer-go/collections"
+	"github.com/farseer-go/fs/parse"
 )
 
 type config struct {
@@ -22,8 +23,9 @@ type ConfigCreateRequest struct {
 }
 
 type ConfigInfo struct {
-	ID   string              `json:"ID"`
-	Spec ConfigCreateRequest `json:"Spec"`
+	ID      string              `json:"ID"`
+	Spec    ConfigCreateRequest `json:"Spec"`
+	Version int                 `json:"-"` // 版本号,读取Spec.Labels["version"]
 }
 
 // CreateConfig 创建一个新的 Docker Config
@@ -86,7 +88,9 @@ func (receiver config) InspectByService(serviceName string) (ConfigInfo, error) 
 	url := fmt.Sprintf("http://localhost/configs?filters=%s", url.QueryEscape(filter))
 
 	configs, err := UnixGetDecode[collections.List[ConfigInfo]](receiver.unixClient, url)
-	result := configs.First()
+	result := configs.OrderByDescending(func(item ConfigInfo) any {
+		return parse.ToInt(item.Spec.Labels["version"])
+	}).First()
 	if err != nil {
 		return result, err
 	}
@@ -103,4 +107,24 @@ func (receiver config) InspectByService(serviceName string) (ConfigInfo, error) 
 
 	result.Spec.Data = string(decodedByte)
 	return result, nil
+}
+
+// GetLastVersion 获取最新的配置文件版本
+func (receiver config) GetLastVersion(serviceName string) (ConfigInfo, error) {
+	// curl --unix-socket /var/run/docker.sock http://localhost/configs
+
+	// 使用 filter 过滤 Label
+	filter := fmt.Sprintf(`{"label": ["owner_service=%s"]}`, serviceName)
+	url := fmt.Sprintf("http://localhost/configs?filters=%s", url.QueryEscape(filter))
+
+	configs, err := UnixGetDecode[collections.List[ConfigInfo]](receiver.unixClient, url)
+	if err != nil {
+		return ConfigInfo{}, err
+	}
+	result := configs.OrderByDescending(func(item ConfigInfo) any {
+		return parse.ToInt(item.Spec.Labels["version"])
+	}).First()
+
+	result.Version = parse.ToInt(result.Spec.Labels["version"])
+	return result, err
 }

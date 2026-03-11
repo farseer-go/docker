@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/farseer-go/collections"
+	"github.com/farseer-go/fs/parse"
 	"github.com/farseer-go/utils/exec"
 )
 
@@ -116,8 +117,13 @@ func (receiver service) Restart(serviceName string) exec.ShellWait {
 	return exec.RunShell("docker", args, nil, "", false)
 }
 
+type ConfigTarget struct {
+	Name   string // 配置文件名称 docker config ls
+	Target string // 挂载到容器内的文件
+}
+
 // Create 创建服务
-func (receiver service) Create(serviceName, dockerNodeRole, additionalScripts, dockerNetwork string, dockerReplicas int, dockerImages string, limitCpus float64, limitMemory string, configName ...string) exec.ShellWait {
+func (receiver service) Create(serviceName, dockerNodeRole, additionalScripts, dockerNetwork string, dockerReplicas int, dockerImages string, limitCpus float64, limitMemory string, config ConfigTarget) exec.ShellWait {
 	args := []string{
 		"service", "create",
 		"--with-registry-auth",
@@ -129,8 +135,8 @@ func (receiver service) Create(serviceName, dockerNodeRole, additionalScripts, d
 	}
 
 	// 挂载 Docker Config（如果提供）
-	if len(configName) > 0 && configName[0] != "" {
-		args = append(args, "--config", fmt.Sprintf("source=%s,target=/app/config.yaml", configName[0]))
+	if len(config.Name) > 0 && len(config.Target) > 0 {
+		args = append(args, "--config", fmt.Sprintf("source=%s,target=%s", config.Name, config.Target))
 	}
 
 	// 节点筛选
@@ -275,7 +281,8 @@ type ServiceListVO struct {
 		} `json:"Mode"`
 		TaskTemplate struct {
 			ContainerSpec struct {
-				Image string `json:"Image"`
+				Image   string              `json:"Image"`
+				Configs []ServiceConfigJson `json:"Configs,omitempty"`
 			} `json:"ContainerSpec"`
 		} `json:"TaskTemplate"`
 	} `json:"Spec"`
@@ -437,28 +444,56 @@ func formatStateInfo(timestamp time.Time, state string) string {
 	}
 }
 
-// UpdateServiceConfig 更新服务的配置关联 (会触发滚动重启)
-func (receiver service) UpdateServiceConfig(serviceName string, newConfigID string, targetPath string) error {
-	// 1. 先 Inspect 拿到当前的完整信息和版本号 (Version)
-	current, err := receiver.Inspect(serviceName)
-	if err != nil {
-		return err
+func (receiver service) UpdateServiceConfig(serviceName string, newConfigID, newConfigName, targetPath string) (bool, error) {
+	// 1. 获取原始 JSON 到 map 中
+	url := fmt.Sprintf("http://localhost/services/%s", serviceName)
+	resp, _ := receiver.unixClient.Get(url)
+	var raw map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&raw)
+	resp.Body.Close()
+
+	// 2. 提取 Spec 和 Version
+	spec := raw["Spec"].(map[string]interface{})
+	version := int(raw["Version"].(map[string]interface{})["Index"].(float64))
+
+	// 3. 动态修改 Configs 数组
+	taskTemplate := spec["TaskTemplate"].(map[string]interface{})
+	containerSpec := taskTemplate["ContainerSpec"].(map[string]interface{})
+	configs := containerSpec["Configs"].([]interface{})
+
+	for i := range configs {
+		cfg := configs[i].(map[string]interface{})
+		// 匹配 targetPath
+		file := cfg["File"].(map[string]interface{})
+		if file["Name"] == targetPath {
+			cfg["ConfigID"] = newConfigID
+			cfg["ConfigName"] = newConfigName
+			// 保留原有权限，只改 ID
+			break
+		}
 	}
 
-	// 2. 修改 Spec 中的 Configs 数组
-	// 注意：这里简单演示替换第一个配置，实际建议根据 targetPath 匹配替换
-	current.Spec.TaskTemplate.ContainerSpec.Configs = []ServiceConfigJson{{
-		ConfigID: newConfigID,
-		File: ServiceConfigFileJson{
-			Name: targetPath, UID: "0", GID: "0", Mode: 0444,
-		},
-	}}
+	// 4. 发送更新
+	updateURL := fmt.Sprintf("http://localhost/services/%s/update?version=%d", serviceName, version)
+	body, _ := json.Marshal(spec) // 只发 Spec 部分
 
-	// 3. 发送更新请求
-	// 必须包含 version 参数（乐观锁检查）
-	url := fmt.Sprintf("http://localhost/services/%s/update?version=%d", serviceName, current.Version.Index)
-	body, _ := json.Marshal(current.Spec)
-	resp, err := receiver.unixClient.Post(url, "application/json", bytes.NewBuffer(body))
+	req, _ := http.NewRequest("POST", updateURL, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := receiver.unixClient.Do(req)
 	resp.Body.Close()
-	return nil
+	return resp.StatusCode == 200, err
+}
+
+// Inspect 查看服务详情
+func (receiver service) GetCurConfigVersion(serviceName string) (int, error) {
+	result, err := receiver.Inspect(serviceName)
+	for _, config := range result.Spec.TaskTemplate.ContainerSpec.Configs {
+		// 构建匹配格式，例如 "fops_config_v%d"
+		format := fmt.Sprintf("%s_config_v", serviceName)
+		if len(config.ConfigName) > len(format) {
+			return parse.ToInt(config.ConfigName[len(format):]), nil
+		}
+	}
+
+	return 0, err
 }
