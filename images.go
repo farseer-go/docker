@@ -23,7 +23,7 @@ type PruneResult struct {
 // Pull 拉取镜像(使用Docker CLI客户端)
 func (receiver images) Pull(image string) exec.ShellWait {
 	//return exec.RunShell(fmt.Sprintf("docker pull %s", image), nil, "", true)
-	return exec.RunShell("docker", []string{"pull ", image}, nil, "", true)
+	return exec.RunShell("docker", []string{"pull", image}, nil, "", true)
 }
 
 // ClearImages 清除镜像
