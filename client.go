@@ -3,6 +3,7 @@ package docker
 import (
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/farseer-go/collections"
@@ -142,4 +143,10 @@ func (receiver *Client) SyncConfig(appName string, targetConfigPath string) bool
 	}
 
 	return false
+}
+
+// 是否运行在docker容器内
+func (receiver *Client) IsRunInDocker() bool {
+	_, err := os.Stat("/.dockerenv")
+	return err == nil
 }
