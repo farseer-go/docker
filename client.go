@@ -4,10 +4,16 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/farseer-go/collections"
 )
+
+var defaultUnixClient *http.Client
+var syncOnce sync.Once // 需要导入 "sync" 包
+
+var DefaultClient *Client = NewClient()
 
 // Client docker client
 type Client struct {
@@ -25,25 +31,30 @@ type Client struct {
 
 // NewClient 实例化一个Client
 func NewClient() *Client {
-	unixClient := &http.Client{
-		Transport: &http.Transport{
-			// 自定义 Dial 函数，将 HTTP 请求通过 Unix Socket 发送
-			Dial: func(network, addr string) (net.Conn, error) {
-				return net.Dial("unix", "/var/run/docker.sock")
+	// 确保底层 http.Client 全局唯一，复用连接池
+	syncOnce.Do(func() {
+		defaultUnixClient = &http.Client{
+			Transport: &http.Transport{
+				// 自定义 Dial 函数，将 HTTP 请求通过 Unix Socket 发送
+				Dial: func(network, addr string) (net.Conn, error) {
+					return net.Dial("unix", "/var/run/docker.sock")
+				},
+				// 建议加上超时限制，防止连接挂死
+				IdleConnTimeout: 90 * time.Second,
 			},
-		},
-	}
+		}
+	})
 
 	client := &Client{
-		unixClient: unixClient,
-		Container:  container{unixClient: unixClient},
-		Service:    service{unixClient: unixClient},
-		Node:       node{unixClient: unixClient},
-		Hub:        hub{unixClient: unixClient},
-		Images:     images{unixClient: unixClient},
-		Event:      event{unixClient: unixClient},
-		Task:       task{unixClient: unixClient},
-		Config:     config{unixClient: unixClient},
+		unixClient: defaultUnixClient,
+		Container:  container{unixClient: defaultUnixClient},
+		Service:    service{unixClient: defaultUnixClient},
+		Node:       node{unixClient: defaultUnixClient},
+		Hub:        hub{unixClient: defaultUnixClient},
+		Images:     images{unixClient: defaultUnixClient},
+		Event:      event{unixClient: defaultUnixClient},
+		Task:       task{unixClient: defaultUnixClient},
+		Config:     config{unixClient: defaultUnixClient},
 	}
 	return client
 }
