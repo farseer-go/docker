@@ -2,6 +2,7 @@ package docker
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -78,6 +79,11 @@ func (receiver service) SetImagesAndReplicas(serviceName string, dockerImages st
 
 // SetImages 更新镜像版本
 func (receiver service) SetImages(serviceName string, dockerImages string, updateDelay int) exec.ShellWait {
+	return receiver.SetImagesContext(context.Background(), serviceName, dockerImages, updateDelay)
+}
+
+// SetImagesContext 更新镜像版本（支持 ctx 控制超时/取消）
+func (receiver service) SetImagesContext(ctx context.Context, serviceName string, dockerImages string, updateDelay int) exec.ShellWait {
 	args := []string{
 		"service", "update",
 		"--image", dockerImages,
@@ -92,7 +98,7 @@ func (receiver service) SetImages(serviceName string, dockerImages string, updat
 
 	args = append(args, serviceName)
 
-	return exec.RunShell("docker", args, nil, "", true)
+	return exec.RunShellContext(ctx, "docker", args, nil, "", true)
 }
 
 // SetReplicas 更新副本数量
