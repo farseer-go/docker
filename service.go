@@ -339,13 +339,25 @@ func (receiver service) PS(lstNode collections.List[DockerNodeVO], serviceName s
 	// 3. 按 Slot 分组
 	// Key: Slot ID, Value: 任务列表
 	slotMap := make(map[int][]ServiceIdInspectJson)
+	globalSlotMap := make(map[string]int)
+	globalSlotSeq := 0
 	for _, task := range tasks {
 		// 排除全局服务（Slot为0）或 Slot 为 0 的情况，通常按 NodeID 分组
 		// 这里假设大部分是副本服务，按 Slot 分组
 		if task.Slot == 0 {
 			// 简单处理：全局服务按 NodeID 归类，或者直接作为独立任务
 			// 为防止 key 冲突，这里假设全局服务也要分组逻辑
-			task.Slot = int(uintptr(task.Index)) // 简单防重，实际业务可能需要更复杂的逻辑
+			globalKey := task.NodeID
+			if globalKey == "" {
+				globalKey = task.ID
+			}
+			if slot, exists := globalSlotMap[globalKey]; exists {
+				task.Slot = slot
+			} else {
+				globalSlotSeq++
+				task.Slot = globalSlotSeq
+				globalSlotMap[globalKey] = task.Slot
+			}
 		}
 
 		// 根据节点ID,找到对应的节点信息，补全节点名称和IP
