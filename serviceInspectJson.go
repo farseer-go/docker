@@ -16,6 +16,7 @@ type ServiceTaskVO struct {
 	NodeIP        string                           // 节点IP
 	State         string                           // 状态   Shutdown Running
 	StateInfo     string                           // 状态
+	DesiredState  string                           // 目标状态
 	Error         string                           // 错误信息
 	Tasks         collections.List[TaskInstanceVO] // 子任务列表
 	CreatedAt     time.Time                        // 创建时间

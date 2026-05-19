@@ -283,15 +283,25 @@ type ServiceListVO struct {
 			Replicated struct {
 				Replicas int `json:"Replicas"` // 副本数量
 			} `json:"Replicated,omitempty"`
-			Global any
+			Global *struct{} `json:"Global,omitempty"`
 		} `json:"Mode"`
 		TaskTemplate struct {
 			ContainerSpec struct {
 				Image   string              `json:"Image"`
 				Configs []ServiceConfigJson `json:"Configs,omitempty"`
 			} `json:"ContainerSpec"`
+			Resources struct {
+				Limits struct {
+					NanoCPUs    int64 `json:"NanoCPUs"`
+					MemoryBytes int64 `json:"MemoryBytes"`
+				} `json:"Limits"`
+			} `json:"Resources"`
 		} `json:"TaskTemplate"`
 	} `json:"Spec"`
+	ServiceStatus *struct {
+		RunningTasks int `json:"RunningTasks"`
+		DesiredTasks int `json:"DesiredTasks"`
+	} `json:"ServiceStatus,omitempty"`
 }
 
 // List 获取所有Service
@@ -299,7 +309,7 @@ func (receiver service) List() collections.List[ServiceListVO] {
 	// curl --unix-socket /var/run/docker.sock http://localhost/services
 	// 1. 获取服务列表
 	// API: GET /services
-	services, _ := UnixGetDecode[collections.List[ServiceListVO]](receiver.unixClient, "http://localhost/services")
+	services, _ := UnixGetDecode[collections.List[ServiceListVO]](receiver.unixClient, "http://localhost/services?status=true")
 	if services.Count() == 0 {
 		return services
 	}
@@ -402,6 +412,7 @@ func (receiver service) PS(lstNode collections.List[DockerNodeVO], serviceName s
 			NodeIP:        mainTask.NodeIP,
 			State:         mainTask.Status.State,
 			StateInfo:     formatStateInfo(mainTask.Status.Timestamp, mainTask.Status.State), // 模拟 CLI 的 "Running 17 minutes ago"
+			DesiredState:  mainTask.DesiredState,
 			Error:         mainTask.Status.Err,
 			Tasks:         collections.NewList[TaskInstanceVO](),
 			CreatedAt:     mainTask.CreatedAt,
