@@ -2,7 +2,6 @@ package docker
 
 import (
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -10,7 +9,7 @@ import (
 )
 
 type node struct {
-	unixClient *http.Client
+	api *dockerAPI
 }
 
 // DockerNodeVO 集群节点信息 docker node ls
@@ -66,8 +65,8 @@ type DockerLabelVO struct {
 // List 获取主机节点列表
 func (receiver node) List() collections.List[DockerNodeVO] {
 	// curl --unix-socket /var/run/docker.sock http://localhost/nodes
-	nodesUrl := "http://localhost/nodes"
-	nodes, err := UnixGetDecode[collections.List[DockerNodeVO]](receiver.unixClient, nodesUrl)
+	nodesUrl := receiver.api.URL("/nodes")
+	nodes, err := UnixGetDecode[collections.List[DockerNodeVO]](receiver.api.httpClient, nodesUrl)
 	if err != nil {
 		return nodes
 	}
@@ -95,10 +94,10 @@ func (receiver node) List() collections.List[DockerNodeVO] {
 func (receiver node) Info(nodeName string) DockerNodeVO {
 	// 2. 调用接口
 	// 直接请求 /nodes/{name}，返回单个对象
-	url := fmt.Sprintf("http://localhost/nodes/%s", nodeName)
+	url := receiver.api.URL(fmt.Sprintf("/nodes/%s", nodeName))
 
 	// 使用泛型获取数据
-	nodeData, _ := UnixGetDecode[DockerNodeVO](receiver.unixClient, url)
+	nodeData, _ := UnixGetDecode[DockerNodeVO](receiver.api.httpClient, url)
 
 	// 3. 转换为业务 VO
 	nodeData.Label = collections.NewList[DockerLabelVO]()

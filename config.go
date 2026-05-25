@@ -14,7 +14,7 @@ import (
 )
 
 type config struct {
-	unixClient *http.Client
+	api *dockerAPI
 }
 type ConfigCreateRequest struct {
 	Name   string            `json:"Name"`
@@ -30,7 +30,7 @@ type ConfigInfo struct {
 
 // CreateConfig 创建一个新的 Docker Config
 func (receiver config) Create(name string, content []byte, labels map[string]string) (string, error) {
-	url := "http://localhost/configs/create"
+	url := receiver.api.URL("/configs/create")
 
 	data := ConfigCreateRequest{
 		Name:   name,
@@ -39,7 +39,7 @@ func (receiver config) Create(name string, content []byte, labels map[string]str
 	}
 
 	body, _ := json.Marshal(data)
-	resp, err := receiver.unixClient.Post(url, "application/json", bytes.NewBuffer(body))
+	resp, err := receiver.api.httpClient.Post(url, "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return "", err
 	}
@@ -57,10 +57,10 @@ func (receiver config) Create(name string, content []byte, labels map[string]str
 // Inspect 查看单个配置详情 (通过 ID 或 Name)
 func (receiver config) Inspect(configIdOrName string) (ConfigInfo, error) {
 	// 1. 构造 URL: /configs/{id_or_name}
-	url := fmt.Sprintf("http://localhost/configs/%s", configIdOrName)
+	url := receiver.api.URL(fmt.Sprintf("/configs/%s", configIdOrName))
 
 	// 2. 调用工具函数解析
-	result, err := UnixGetDecode[ConfigInfo](receiver.unixClient, url)
+	result, err := UnixGetDecode[ConfigInfo](receiver.api.httpClient, url)
 	if err != nil {
 		return result, err
 	}
@@ -85,9 +85,9 @@ func (receiver config) InspectByService(serviceName string) (ConfigInfo, error) 
 
 	// 使用 filter 过滤 Label
 	filter := fmt.Sprintf(`{"label": ["owner_service=%s"]}`, serviceName)
-	url := fmt.Sprintf("http://localhost/configs?filters=%s", url.QueryEscape(filter))
+	url := receiver.api.URL(fmt.Sprintf("/configs?filters=%s", url.QueryEscape(filter)))
 
-	configs, err := UnixGetDecode[collections.List[ConfigInfo]](receiver.unixClient, url)
+	configs, err := UnixGetDecode[collections.List[ConfigInfo]](receiver.api.httpClient, url)
 	result := configs.OrderByDescending(func(item ConfigInfo) any {
 		return parse.ToInt(item.Spec.Labels["version"])
 	}).First()
@@ -115,9 +115,9 @@ func (receiver config) GetLastVersion(serviceName string) (ConfigInfo, error) {
 
 	// 使用 filter 过滤 Label
 	filter := fmt.Sprintf(`{"label": ["owner_service=%s"]}`, serviceName)
-	url := fmt.Sprintf("http://localhost/configs?filters=%s", url.QueryEscape(filter))
+	url := receiver.api.URL(fmt.Sprintf("/configs?filters=%s", url.QueryEscape(filter)))
 
-	configs, err := UnixGetDecode[collections.List[ConfigInfo]](receiver.unixClient, url)
+	configs, err := UnixGetDecode[collections.List[ConfigInfo]](receiver.api.httpClient, url)
 	if err != nil {
 		return ConfigInfo{}, err
 	}

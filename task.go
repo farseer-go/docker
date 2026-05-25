@@ -1,24 +1,23 @@
 package docker
 
 import (
-	"net/http"
 	"strings"
 
 	"fmt"
 )
 
 type task struct {
-	unixClient *http.Client
+	api *dockerAPI
 }
 
 // Inspect 查看服务详情
 // 注意：由于 Service 本身不包含 ContainerID，此方法实际上是通过 Service ID 查询其关联的 Task 列表
 func (receiver task) Inspect(taskId string) (ServiceIdInspectJson, error) {
 	// curl --unix-socket /var/run/docker.sock http://localhost/tasks/kbo9xu9qtxw1b69r02tt57bvh
-	url := fmt.Sprintf("http://localhost/tasks/%s", taskId)
+	url := receiver.api.URL(fmt.Sprintf("/tasks/%s", taskId))
 
 	// 调用工具方法解析
-	task, err := UnixGetDecode[ServiceIdInspectJson](receiver.unixClient, url)
+	task, err := UnixGetDecode[ServiceIdInspectJson](receiver.api.httpClient, url)
 	if err != nil {
 		return task, err
 	}

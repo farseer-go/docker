@@ -2,13 +2,12 @@ package docker
 
 import (
 	"fmt"
-	"net/http"
 
 	"github.com/farseer-go/utils/exec"
 )
 
 type images struct {
-	unixClient *http.Client
+	api *dockerAPI
 }
 
 // 4. 解析 JSON
@@ -23,15 +22,15 @@ type PruneResult struct {
 // Pull 拉取镜像(使用Docker CLI客户端)
 func (receiver images) Pull(image string) exec.ShellWait {
 	//return exec.RunShell(fmt.Sprintf("docker pull %s", image), nil, "", true)
-	return exec.RunShell("docker", []string{"pull", image}, nil, "", true)
+	return exec.RunShell("docker", []string{"pull", image}, receiver.api.cliEnv(nil), "", true)
 }
 
 // ClearImages 清除镜像
 func (receiver images) ClearImages() ([]string, error) {
-	url := "http://localhost/system/prune?all=true&force=true"
+	url := receiver.api.URL("/system/prune?all=true&force=true")
 
 	// 一行代码搞定请求和解析
-	result, err := UnixPostDecode[PruneResult](receiver.unixClient, url)
+	result, err := UnixPostDecode[PruneResult](receiver.api.httpClient, url)
 	if err != nil {
 		return nil, err
 	}

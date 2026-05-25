@@ -1,72 +1,177 @@
 package docker
 
 import (
+	"context"
+	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
-	"sync"
+	"strings"
 	"time"
 
 	"github.com/farseer-go/collections"
 )
 
-var defaultUnixClient *http.Client
-var syncOnce sync.Once // 需要导入 "sync" 包
+const defaultDockerHost = "unix:///var/run/docker.sock"
 
 var DefaultClient *Client = NewClient()
+
+type dockerEndpoint struct {
+	rawHost string
+	scheme  string
+	address string
+	baseURL string
+}
+
+type dockerAPI struct {
+	httpClient *http.Client
+	endpoint   dockerEndpoint
+	initErr    error
+}
+
+func (receiver *dockerAPI) URL(apiPath string) string {
+	return strings.TrimRight(receiver.endpoint.baseURL, "/") + "/" + strings.TrimLeft(apiPath, "/")
+}
+
+func (receiver *dockerAPI) cliEnv(extra map[string]string) map[string]string {
+	env := map[string]string{}
+	for k, v := range extra {
+		env[k] = v
+	}
+	env["DOCKER_HOST"] = receiver.endpoint.rawHost
+	return env
+}
+
+type errorTransport struct {
+	err error
+}
+
+func (receiver errorTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, receiver.err
+}
 
 // Client docker client
 type Client struct {
 	//dockerClient *client.Client
-	Container  container
-	Service    service
-	Node       node
-	Hub        hub
-	Images     images
-	Event      event
-	unixClient *http.Client
-	Task       task
-	Config     config
+	Container container
+	Service   service
+	Node      node
+	Hub       hub
+	Images    images
+	Event     event
+	api       *dockerAPI
+	Task      task
+	Config    config
 }
 
 // NewClient 实例化一个Client
 func NewClient() *Client {
-	// 确保底层 http.Client 全局唯一，复用连接池
-	syncOnce.Do(func() {
-		defaultUnixClient = &http.Client{
-			Transport: &http.Transport{
-				// 自定义 Dial 函数，将 HTTP 请求通过 Unix Socket 发送
-				Dial: func(network, addr string) (net.Conn, error) {
-					return net.Dial("unix", "/var/run/docker.sock")
-				},
-				// 建议加上超时限制，防止连接挂死
-				IdleConnTimeout: 90 * time.Second,
-			},
-		}
-	})
-
+	api := newDockerAPI(os.Getenv("DOCKER_HOST"))
 	client := &Client{
-		unixClient: defaultUnixClient,
-		Container:  container{unixClient: defaultUnixClient},
-		Service:    service{unixClient: defaultUnixClient},
-		Node:       node{unixClient: defaultUnixClient},
-		Hub:        hub{unixClient: defaultUnixClient},
-		Images:     images{unixClient: defaultUnixClient},
-		Event:      event{unixClient: defaultUnixClient},
-		Task:       task{unixClient: defaultUnixClient},
-		Config:     config{unixClient: defaultUnixClient},
+		api:       api,
+		Container: container{api: api},
+		Service:   service{api: api},
+		Node:      node{api: api},
+		Hub:       hub{api: api},
+		Images:    images{api: api},
+		Event:     event{api: api},
+		Task:      task{api: api},
+		Config:    config{api: api},
 	}
 	return client
 }
 
+func newDockerAPI(rawHost string) *dockerAPI {
+	endpoint, err := parseDockerHost(rawHost)
+	if err != nil {
+		return &dockerAPI{
+			httpClient: &http.Client{Transport: errorTransport{err: err}},
+			endpoint:   endpoint,
+			initErr:    err,
+		}
+	}
+
+	return &dockerAPI{
+		httpClient: newHTTPClient(endpoint),
+		endpoint:   endpoint,
+	}
+}
+
+func parseDockerHost(rawHost string) (dockerEndpoint, error) {
+	rawHost = strings.TrimSpace(rawHost)
+	if rawHost == "" {
+		rawHost = defaultDockerHost
+	}
+
+	endpoint := dockerEndpoint{rawHost: rawHost}
+	if dockerTLSVerifyEnabled() {
+		return endpoint, fmt.Errorf("unsupported Docker TLS configuration for DOCKER_HOST %q", rawHost)
+	}
+
+	u, err := url.Parse(rawHost)
+	if err != nil {
+		return endpoint, err
+	}
+
+	switch u.Scheme {
+	case "unix":
+		if u.Path == "" {
+			return endpoint, fmt.Errorf("invalid DOCKER_HOST %q: unix socket path is empty", rawHost)
+		}
+		endpoint.scheme = "unix"
+		endpoint.address = u.Path
+		endpoint.baseURL = "http://docker"
+		return endpoint, nil
+	case "tcp":
+		if u.Host == "" {
+			return endpoint, fmt.Errorf("invalid DOCKER_HOST %q: tcp host is empty", rawHost)
+		}
+		endpoint.scheme = "tcp"
+		endpoint.address = u.Host
+		endpoint.baseURL = "http://" + u.Host
+		return endpoint, nil
+	case "http":
+		if u.Host == "" {
+			return endpoint, fmt.Errorf("invalid DOCKER_HOST %q: http host is empty", rawHost)
+		}
+		endpoint.scheme = "tcp"
+		endpoint.address = u.Host
+		endpoint.baseURL = "http://" + u.Host
+		return endpoint, nil
+	case "https":
+		return endpoint, fmt.Errorf("unsupported DOCKER_HOST scheme %q; supported schemes: unix, tcp, http", u.Scheme)
+	case "":
+		return endpoint, fmt.Errorf("invalid DOCKER_HOST %q: scheme is empty", rawHost)
+	default:
+		return endpoint, fmt.Errorf("unsupported DOCKER_HOST scheme %q; supported schemes: unix, tcp, http", u.Scheme)
+	}
+}
+
+func dockerTLSVerifyEnabled() bool {
+	value := strings.TrimSpace(os.Getenv("DOCKER_TLS_VERIFY"))
+	return value != "" && value != "0"
+}
+
+func newHTTPClient(endpoint dockerEndpoint) *http.Client {
+	transport := &http.Transport{IdleConnTimeout: 90 * time.Second}
+	if endpoint.scheme == "unix" {
+		transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "unix", endpoint.address)
+		}
+	} else {
+		transport.Proxy = http.ProxyFromEnvironment
+	}
+	return &http.Client{Transport: transport}
+}
+
 // GetVersion 获取系统Docker版本
 func (receiver *Client) GetVersion() string {
-	// curl --unix-socket /var/run/docker.sock http://localhost/version
 	type VersionResponse struct {
 		Version    string `json:"Version"`    // Docker 版本
 		ApiVersion string `json:"ApiVersion"` // API 版本
 	}
-	version, _ := UnixGetDecode[VersionResponse](receiver.unixClient, "http://localhost/version")
+	version, _ := UnixGetDecode[VersionResponse](receiver.api.httpClient, receiver.api.URL("/version"))
 	return version.Version
 }
 
@@ -119,8 +224,7 @@ type DockerInfo struct {
 }
 
 func (receiver *Client) GetInfo() DockerInfo {
-	// curl --unix-socket /var/run/docker.sock http://localhost/info
-	apiData, _ := UnixGetDecode[DockerInfo](receiver.unixClient, "http://localhost/info")
+	apiData, _ := UnixGetDecode[DockerInfo](receiver.api.httpClient, receiver.api.URL("/info"))
 	return apiData
 }
 

@@ -1,7 +1,6 @@
 package docker
 
 import (
-	"net/http"
 	"sync"
 
 	"github.com/farseer-go/fs/snc"
@@ -9,9 +8,9 @@ import (
 )
 
 type event struct {
-	unixClient *http.Client
-	handlers   []EventHandler
-	mu         sync.RWMutex
+	api      *dockerAPI
+	handlers []EventHandler
+	mu       sync.RWMutex
 }
 
 // EventHandler 事件处理器接口
@@ -66,7 +65,7 @@ func (receiver *event) RegisterFunc(handler func(event EventResult)) {
 
 // Start 启动事件监听（只启动一次）
 func (receiver *event) Start() {
-	wait := exec.RunShell("docker", []string{"events", "--format", "{{json .}}"}, nil, "", false)
+	wait := exec.RunShell("docker", []string{"events", "--format", "{{json .}}"}, receiver.api.cliEnv(nil), "", false)
 	go wait.WaitToFunc(func(json string) {
 		var eventResult EventResult
 		snc.Unmarshal([]byte(json), &eventResult)

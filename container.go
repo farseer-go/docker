@@ -20,15 +20,15 @@ import (
 )
 
 type container struct {
-	unixClient *http.Client
+	api *dockerAPI
 }
 
 // Exists 判断容器是否已创建
 func (receiver container) Exists(containerId string) bool {
-	url := fmt.Sprintf("http://localhost/containers/%s/json", containerId)
+	url := receiver.api.URL(fmt.Sprintf("/containers/%s/json", containerId))
 
 	// 使用 UnixGet (工具方法内已处理 Body 关闭)
-	resp, err := UnixGet(receiver.unixClient, url)
+	resp, err := UnixGet(receiver.api.httpClient, url)
 	if err != nil {
 		return false
 	}
@@ -38,28 +38,28 @@ func (receiver container) Exists(containerId string) bool {
 
 // Kill 停止容器并删除
 func (receiver container) Kill(containerId string) error {
-	url := fmt.Sprintf("http://localhost/containers/%s/kill", containerId)
+	url := receiver.api.URL(fmt.Sprintf("/containers/%s/kill", containerId))
 
 	// 使用 UnixPost，内部已判断 204 并生成 error
-	_, err := UnixPost(receiver.unixClient, url)
+	_, err := UnixPost(receiver.api.httpClient, url)
 	return err
 }
 
 // RM 删除容器
 func (receiver container) RM(containerId string) error {
-	url := fmt.Sprintf("http://localhost/containers/%s", containerId)
+	url := receiver.api.URL(fmt.Sprintf("/containers/%s", containerId))
 
 	// 使用 UnixDelete
-	_, err := UnixDelete(receiver.unixClient, url)
+	_, err := UnixDelete(receiver.api.httpClient, url)
 	return err
 }
 
 // Restart 重启容器
 func (receiver container) Restart(containerId string) error {
-	url := fmt.Sprintf("http://localhost/containers/%s/restart", containerId)
+	url := receiver.api.URL(fmt.Sprintf("/containers/%s/restart", containerId))
 
 	// 使用 UnixPost，内部已处理状态码判断和错误封装
-	_, err := UnixPost(receiver.unixClient, url)
+	_, err := UnixPost(receiver.api.httpClient, url)
 	return err
 }
 
@@ -83,7 +83,7 @@ func (receiver container) Run(containerId string, networkName string, dockerImag
 
 	dockerArgs = append(dockerArgs, dockerImage)
 
-	return exec.RunShellContext(ctx, "docker", dockerArgs, env, "", true)
+	return exec.RunShellContext(ctx, "docker", dockerArgs, receiver.api.cliEnv(env), "", true)
 }
 
 // 在容器内部执行cmd命令(使用Docker CLI客户端)
@@ -98,7 +98,7 @@ func (receiver container) Exec(containerId string, execCmd string, env map[strin
 		args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))
 	}
 	args = append(args, containerId, "sh", "-c", execCmd)
-	return exec.RunShellContext(ctx, "docker", args, nil, "", false)
+	return exec.RunShellContext(ctx, "docker", args, receiver.api.cliEnv(nil), "", false)
 }
 
 // Cp 复制文件到容器内(使用Docker CLI客户端)
@@ -108,7 +108,7 @@ func (receiver container) Cp(containerId string, sourceFile, destFile string, ct
 
 	// docker cp /var/lib/fops/dist/Dockerfile FOPS-Build:/var/lib/fops/dist/Dockerfile
 	args := []string{"cp", sourceFile, containerId + ":" + destFile}
-	return exec.RunShellContext(ctx, "docker", args, nil, "", false)
+	return exec.RunShellContext(ctx, "docker", args, receiver.api.cliEnv(nil), "", false)
 }
 
 // Logs 获取日志
@@ -117,10 +117,10 @@ func (receiver container) Logs(containerId string, tailCount int) collections.Li
 	// 1. 构造 URL
 	// tail=N : 告诉 Docker 守护进程只返回最后 N 行
 	// stdout=true&stderr=true : 包含标准输出和错误
-	url := fmt.Sprintf("http://localhost/containers/%s/logs?stdout=true&stderr=true&tail=%d", containerId, tailCount)
+	url := receiver.api.URL(fmt.Sprintf("/containers/%s/logs?stdout=true&stderr=true&tail=%d", containerId, tailCount))
 
 	// 2. 发送请求
-	resp, err := receiver.unixClient.Get(url)
+	resp, err := receiver.api.httpClient.Get(url)
 	if err != nil {
 		return collections.List[string]{}
 	}
@@ -228,12 +228,12 @@ type Container struct {
 // List 获取容器列表
 func (receiver container) List(status string, labels map[string]string) (collections.List[Container], error) {
 	// curl --unix-socket /var/run/docker.sock http://localhost/containers/json?status=
-	url := "http://localhost/containers/json?status=" + status
+	url := receiver.api.URL("/containers/json?status=" + status)
 	for k, v := range labels {
 		url += "&label=" + k + "=" + v
 	}
 
-	containers, err := UnixGetDecode[collections.List[Container]](receiver.unixClient, url)
+	containers, err := UnixGetDecode[collections.List[Container]](receiver.api.httpClient, url)
 	containers.Foreach(func(item *Container) {
 		if len(item.Names) > 0 {
 			item.Name = strings.TrimPrefix(strings.Split(item.Names[0], ".")[0], "/")
@@ -246,11 +246,11 @@ func (receiver container) List(status string, labels map[string]string) (collect
 // Inspect 查看容器详情
 func (receiver container) Inspect(containerId string) (ContainerIdInspectJson, error) {
 	// curl --unix-socket /var/run/docker.sock http://localhost/containers/kb44fvovlg1o/json
-	url := fmt.Sprintf("http://localhost/containers/%s/json", containerId)
+	url := receiver.api.URL(fmt.Sprintf("/containers/%s/json", containerId))
 
 	// 1. 使用工具函数直接请求并解析
 	// 注意：您的工具函数忽略了 HTTP 错误码和 JSON 解析错误，这里直接使用
-	result, _ := UnixGetDecode[ContainerIdInspectJson](receiver.unixClient, url)
+	result, _ := UnixGetDecode[ContainerIdInspectJson](receiver.api.httpClient, url)
 
 	// 2. 通过判断 ID 是否为空来确定容器是否存在
 	// Docker 404 错误返回的是 {"message": "..."}，解析后 ID 字段为空
@@ -296,8 +296,8 @@ func (receiver container) Stats(containerID string) DockerStatsVO {
 	}
 
 	// curl --unix-socket /var/run/docker.sock http://localhost/containers/9e76ea4b0231/stats?stream=false
-	url := fmt.Sprintf("http://localhost/containers/%s/stats?stream=false", containerID)
-	stats, err := UnixGetDecode[StatsResponse](receiver.unixClient, url)
+	url := receiver.api.URL(fmt.Sprintf("/containers/%s/stats?stream=false", containerID))
+	stats, err := UnixGetDecode[StatsResponse](receiver.api.httpClient, url)
 	if err != nil {
 		return dockerStatsVO
 	}
@@ -360,7 +360,7 @@ func (receiver container) GetFileSize(containerID, filePath string, ctx context.
 
 // ReadFileFromContainer 使用 docker archive API 从容器读取文件
 func (receiver container) ReadFileFromContainer(containerID, filePath string, ctx context.Context) ([]byte, error) {
-	resp, err := receiver.unixClient.Get(fmt.Sprintf("http://localhost/containers/%s/archive?path=%s", containerID, filePath))
+	resp, err := receiver.api.httpClient.Get(receiver.api.URL(fmt.Sprintf("/containers/%s/archive?path=%s", containerID, filePath)))
 	if err != nil {
 		return nil, err
 	}

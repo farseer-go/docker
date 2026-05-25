@@ -19,18 +19,18 @@ import (
 )
 
 type service struct {
-	unixClient *http.Client
+	api *dockerAPI
 }
 
 // Inspect 查看服务详情
 func (receiver service) Inspect(serviceName string) (ServiceInspectJson, error) {
 	// 1. 构造 URL
 	// 直接访问 /services/{name}，API 返回单个对象
-	url := fmt.Sprintf("http://localhost/services/%s", serviceName)
+	url := receiver.api.URL(fmt.Sprintf("/services/%s", serviceName))
 
 	// 2. 调用工具函数解析
 	// 因为 ServiceInspectJson 是结构体，直接对应 API 返回的 { ... }
-	result, _ := UnixGetDecode[ServiceInspectJson](receiver.unixClient, url)
+	result, _ := UnixGetDecode[ServiceInspectJson](receiver.api.httpClient, url)
 
 	// 3. 判断是否存在
 	// 如果服务不存在 (404)，API 返回 {"message": "..."}，解析后结构体字段均为默认值
@@ -55,11 +55,11 @@ func (receiver service) Exists(serviceName string) bool {
 func (receiver service) Delete(serviceName string) error {
 	// 1. 构造 URL
 	// API: DELETE /services/{id}
-	url := fmt.Sprintf("http://localhost/services/%s", serviceName)
+	url := receiver.api.URL(fmt.Sprintf("/services/%s", serviceName))
 
 	// 2. 调用工具函数 UnixDelete
 	// UnixDelete 内部已处理了 204 判断和错误封装
-	_, err := UnixDelete(receiver.unixClient, url)
+	_, err := UnixDelete(receiver.api.httpClient, url)
 
 	return err
 }
@@ -74,7 +74,7 @@ func (receiver service) SetImagesAndReplicas(serviceName string, dockerImages st
 		"--update-order", "start-first",
 		serviceName,
 	}
-	return exec.RunShell("docker", args, nil, "", false)
+	return exec.RunShell("docker", args, receiver.api.cliEnv(nil), "", false)
 }
 
 // SetImages 更新镜像版本
@@ -98,7 +98,7 @@ func (receiver service) SetImagesContext(ctx context.Context, serviceName string
 
 	args = append(args, serviceName)
 
-	return exec.RunShellContext(ctx, "docker", args, nil, "", true)
+	return exec.RunShellContext(ctx, "docker", args, receiver.api.cliEnv(nil), "", true)
 }
 
 // SetReplicas 更新副本数量
@@ -109,7 +109,7 @@ func (receiver service) SetReplicas(serviceName string, dockerReplicas int) exec
 		"--with-registry-auth",
 		serviceName,
 	}
-	return exec.RunShell("docker", args, nil, "", false)
+	return exec.RunShell("docker", args, receiver.api.cliEnv(nil), "", false)
 }
 
 // Restart 重启容器
@@ -120,7 +120,7 @@ func (receiver service) Restart(serviceName string) exec.ShellWait {
 		"--force",
 		serviceName,
 	}
-	return exec.RunShell("docker", args, nil, "", false)
+	return exec.RunShell("docker", args, receiver.api.cliEnv(nil), "", false)
 }
 
 type ConfigTarget struct {
@@ -170,7 +170,7 @@ func (receiver service) Create(serviceName, dockerNodeRole, additionalScripts, d
 
 	args = append(args, dockerImages)
 
-	return exec.RunShell("docker", args, nil, "", true)
+	return exec.RunShell("docker", args, receiver.api.cliEnv(nil), "", true)
 }
 
 // ParseShellArgs 解析 shell 风格的参数字符串（支持引号和续行符）
@@ -222,7 +222,7 @@ func (receiver service) Logs(serviceIdOrServiceName string, tailCount int) (coll
 		"--tail", fmt.Sprintf("%d", tailCount),
 	}
 
-	wait := exec.RunShell("docker", args, nil, "", true)
+	wait := exec.RunShell("docker", args, receiver.api.cliEnv(nil), "", true)
 	lstLog, exitCode := wait.WaitToList()
 
 	lst := collections.NewList[ServiceLogVO]()
@@ -309,7 +309,7 @@ func (receiver service) List() collections.List[ServiceListVO] {
 	// curl --unix-socket /var/run/docker.sock http://localhost/services
 	// 1. 获取服务列表
 	// API: GET /services
-	services, _ := UnixGetDecode[collections.List[ServiceListVO]](receiver.unixClient, "http://localhost/services?status=true")
+	services, _ := UnixGetDecode[collections.List[ServiceListVO]](receiver.api.httpClient, receiver.api.URL("/services?status=true"))
 	if services.Count() == 0 {
 		return services
 	}
@@ -329,9 +329,9 @@ func (receiver service) PS(lstNode collections.List[DockerNodeVO], serviceName s
 	// 1. 获取任务列表
 	// API 过滤器：{"service":{"serviceName":true}}
 	filter := fmt.Sprintf(`{"service":{"%s":true}}`, serviceName)
-	tasksUrl := "http://localhost/tasks?filters=" + url.QueryEscape(filter)
+	tasksUrl := receiver.api.URL("/tasks?filters=" + url.QueryEscape(filter))
 
-	tasks, err := UnixGetDecode[[]ServiceIdInspectJson](receiver.unixClient, tasksUrl)
+	tasks, err := UnixGetDecode[[]ServiceIdInspectJson](receiver.api.httpClient, tasksUrl)
 	if err != nil || len(tasks) == 0 {
 		return lstTaskGroupVO
 	}
@@ -475,8 +475,8 @@ func formatStateInfo(timestamp time.Time, state string) string {
 
 func (receiver service) UpdateServiceConfig(serviceName string, newConfigID, newConfigName, targetPath string) (bool, error) {
 	// 1. 获取原始 JSON 到 map 中
-	url := fmt.Sprintf("http://localhost/services/%s", serviceName)
-	resp, _ := receiver.unixClient.Get(url)
+	url := receiver.api.URL(fmt.Sprintf("/services/%s", serviceName))
+	resp, _ := receiver.api.httpClient.Get(url)
 	var raw map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&raw)
 	resp.Body.Close()
@@ -503,12 +503,12 @@ func (receiver service) UpdateServiceConfig(serviceName string, newConfigID, new
 	}
 
 	// 4. 发送更新
-	updateURL := fmt.Sprintf("http://localhost/services/%s/update?version=%d", serviceName, version)
+	updateURL := receiver.api.URL(fmt.Sprintf("/services/%s/update?version=%d", serviceName, version))
 	body, _ := json.Marshal(spec) // 只发 Spec 部分
 
 	req, _ := http.NewRequest("POST", updateURL, bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := receiver.unixClient.Do(req)
+	resp, err := receiver.api.httpClient.Do(req)
 	resp.Body.Close()
 	return resp.StatusCode == 200, err
 }
