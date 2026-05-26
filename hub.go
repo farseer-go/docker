@@ -13,14 +13,23 @@ type hub struct {
 // Login 登陆仓库(使用Docker CLI客户端)
 func (receiver hub) Login(dockerHub string, loginName string, loginPwd string) exec.ShellWait {
 	if loginName != "" && loginPwd != "" {
-		// 不包含域名的，意味着是登陆docker官网，不需要额外设置登陆的URL
-		if !strings.Contains(dockerHub, ".") {
-			dockerHub = ""
+		args := []string{"login", "-u", loginName, "--password-stdin"}
+		if loginHost := getLoginHost(dockerHub); loginHost != "" {
+			args = append(args, loginHost)
 		}
-
-		//return exec.RunShell("docker login "+dockerHub+" -u "+loginName+" -p "+loginPwd, nil, "", true)
-		return exec.RunShell("docker", []string{"login", dockerHub, "-u", loginName, "-p", loginPwd}, receiver.api.cliEnv(nil), "", true)
+		return exec.RunShellInput("docker", args, map[string]string{"DOCKER_HOST": ""}, "", true, loginPwd)
 	}
 
 	return exec.NewExitShellWait(-1, "登陆名和密码不能为空")
+}
+
+func getLoginHost(dockerHub string) string {
+	dockerHub = strings.TrimSpace(strings.TrimRight(dockerHub, "/"))
+	if dockerHub == "" || !strings.ContainsAny(dockerHub, ".:") {
+		return ""
+	}
+	if index := strings.Index(dockerHub, "/"); index > -1 {
+		return dockerHub[:index]
+	}
+	return dockerHub
 }
