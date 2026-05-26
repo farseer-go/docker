@@ -17,7 +17,8 @@ func (receiver hub) Login(dockerHub string, loginName string, loginPwd string) e
 		if loginHost := getLoginHost(dockerHub); loginHost != "" {
 			args = append(args, loginHost)
 		}
-		return exec.RunShellInput("docker", args, map[string]string{"DOCKER_HOST": ""}, "", true, loginPwd)
+		args = append([]string{"-u", "DOCKER_HOST", "docker"}, args...)
+		return exec.RunShellInput("env", args, nil, "", true, loginPwd)
 	}
 
 	return exec.NewExitShellWait(-1, "登陆名和密码不能为空")
