@@ -68,6 +68,18 @@ type Client struct {
 // NewClient 实例化一个Client
 func NewClient() *Client {
 	api := newDockerAPI(os.Getenv("DOCKER_HOST"))
+	return newClientWithAPI(api)
+}
+
+// NewClientWithHost 使用指定的DockerHost实例化一个Client
+// dockerHost: Docker连接地址，如 tcp://172.19.235.16:2375 或 unix:///var/run/docker.sock
+func NewClientWithHost(dockerHost string) *Client {
+	api := newDockerAPI(dockerHost)
+	return newClientWithAPI(api)
+}
+
+// newClientWithAPI 使用指定的dockerAPI创建Client（内部方法）
+func newClientWithAPI(api *dockerAPI) *Client {
 	client := &Client{
 		api:       api,
 		Container: container{api: api},
