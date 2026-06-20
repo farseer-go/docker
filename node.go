@@ -52,8 +52,9 @@ type DockerNodeVO struct {
 	CreatedAt time.Time `json:"CreatedAt"` // 创建时间
 	UpdatedAt time.Time `json:"UpdatedAt"` // 更新时间
 
-	IsHealth bool                            // 应用是否健康
-	Label    collections.List[DockerLabelVO] // 标签
+	IsHealth  bool                            // 应用是否健康
+	Label     collections.List[DockerLabelVO] // 标签
+	ClusterId int                             // 所属集群Id（Docker API 不返回，由 FOPS 侧上报时按 IP 反查回填）
 }
 
 // DockerLabelVO 标签
